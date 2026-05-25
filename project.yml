@@ -1,0 +1,60 @@
+name: Widfly
+options:
+  bundleIdPrefix: com.widfly
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  WidflyKit:
+    path: .
+
+targets:
+  Widfly:
+    type: application
+    platform: iOS
+    sources:
+      - path: ios/Widfly
+    dependencies:
+      - package: WidflyKit
+      - target: WidflyWidgetExtension
+    entitlements:
+      path: ios/Widfly/Widfly.entitlements
+    info:
+      path: ios/Widfly/Info.plist
+      properties:
+        CFBundleDisplayName: Widfly
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS:
+          enabled: 1
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.cagataykalayci.widfly
+      TARGETED_DEVICE_FAMILY: "1"
+      SWIFT_VERSION: "5.9"
+      CODE_SIGN_STYLE: Automatic
+
+  WidflyWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ios/WidflyWidget
+    dependencies:
+      - package: WidflyKit
+    entitlements:
+      path: ios/WidflyWidget/WidflyWidget.entitlements
+    info:
+      path: ios/WidflyWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Widfly
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS:
+          enabled: 1
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.cagataykalayci.widfly.widget
+      TARGETED_DEVICE_FAMILY: "1"
+      SWIFT_VERSION: "5.9"
+      CODE_SIGN_STYLE: Automatic
