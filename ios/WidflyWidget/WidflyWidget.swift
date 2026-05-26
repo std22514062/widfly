@@ -95,55 +95,55 @@ private struct FlightCard: View {
     private var compact: Bool { family == .systemSmall }
 
     private var iataFont: Font {
-        .system(size: compact ? 13 : 15, weight: .heavy, design: .monospaced)
+        .system(size: compact ? 15 : 17, weight: .black, design: .default)
     }
 
-    private var arrowSize: CGFloat { compact ? 10 : 11 }
-
-    private var planeSize: CGFloat { compact ? 10 : 12 }
+    private var planeSize: CGFloat { compact ? 11 : 13 }
 
     private var priceFont: Font {
-        .system(size: compact ? 14 : 16, weight: .bold, design: .monospaced)
+        .system(size: compact ? 14 : 16, weight: .heavy, design: .default)
             .monospacedDigit()
     }
 
     private var dateFont: Font {
-        .system(size: compact ? 9 : 11, weight: .medium)
+        .system(size: compact ? 9 : 11, weight: .bold, design: .default)
     }
 
     private var deltaArrowSize: CGFloat { compact ? 7 : 9 }
     private var deltaFont: Font {
-        .system(size: compact ? 9 : 10, weight: .semibold, design: .monospaced)
+        .system(size: compact ? 9 : 10, weight: .bold, design: .default)
+            .monospacedDigit()
     }
 
-    private static let amber = Color(red: 1.0, green: 0.65, blue: 0.18)
+    // Amber matches the app icon accent (#F5C518). Used for price rises.
+    private static let amber = Color(red: 0.961, green: 0.773, blue: 0.094)
+    // Green for price drops.
     private static let dropGreen = Color(red: 0.40, green: 0.85, blue: 0.55)
 
     private var dateText: String {
-        flight.departureDate.formatted(.dateTime.day().month(.abbreviated))
+        flight.departureDate
+            .formatted(.dateTime.day().month(.abbreviated))
+            .uppercased()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // Top row: ✈ + IATA pair
-            HStack(spacing: compact ? 5 : 7) {
-                Image(systemName: "airplane.departure")
-                    .font(.system(size: planeSize, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .fixedSize()
+            // Top row: IATA · ✈ · IATA (airplane sits between the two codes)
+            HStack(spacing: compact ? 6 : 9) {
                 Text(flight.origin)
                     .font(iataFont)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: true, vertical: false)
-                Image(systemName: "arrow.right")
-                    .font(.system(size: arrowSize, weight: .bold))
-                    .foregroundStyle(Self.amber)
+                Spacer(minLength: 2)
+                Image(systemName: "airplane")
+                    .font(.system(size: planeSize, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
                     .fixedSize()
+                Spacer(minLength: 2)
                 Text(flight.destination)
                     .font(iataFont)
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: true, vertical: false)
-                Spacer(minLength: 0)
             }
 
             // Bottom row: date · Spacer · price · delta
@@ -159,14 +159,14 @@ private struct FlightCard: View {
                 deltaPill
             }
         }
-        .padding(.horizontal, compact ? 9 : 12)
-        .padding(.vertical, compact ? 5 : 6)
+        .padding(.horizontal, compact ? 10 : 14)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: compact ? 11 : 12, style: .continuous)
+            RoundedRectangle(cornerRadius: compact ? 11 : 13, style: .continuous)
                 .fill(Color.white.opacity(0.08))
                 .overlay(
-                    RoundedRectangle(cornerRadius: compact ? 11 : 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+                    RoundedRectangle(cornerRadius: compact ? 11 : 13, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.6)
                 )
         )
     }
@@ -215,31 +215,9 @@ private struct FlightCard: View {
 // MARK: - Container background
 
 private struct WidgetBackground: View {
+    // Deep navy (#0B2545) — same family as the app icon.
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.06, green: 0.07, blue: 0.18),
-                Color(red: 0.03, green: 0.04, blue: 0.10),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .overlay(
-            RadialGradient(
-                colors: [Color.purple.opacity(0.18), .clear],
-                center: .topTrailing,
-                startRadius: 0,
-                endRadius: 220
-            )
-        )
-        .overlay(
-            RadialGradient(
-                colors: [Color.blue.opacity(0.20), .clear],
-                center: .bottomLeading,
-                startRadius: 0,
-                endRadius: 220
-            )
-        )
+        Color(red: 0.043, green: 0.145, blue: 0.271)
     }
 }
 
