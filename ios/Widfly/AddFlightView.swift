@@ -4,8 +4,8 @@ struct AddFlightView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    @State private var origin = "IST"
-    @State private var destination = "AMS"
+    @State private var origin: String = ""
+    @State private var destination: String = ""
     @State private var departureDate = Date().addingTimeInterval(60 * 60 * 24 * 30)
     @State private var refreshAfterSave = true
     @State private var maxHours: Double = 8
@@ -15,21 +15,21 @@ struct AddFlightView: View {
         NavigationStack {
             Form {
                 Section("Route") {
-                    TextField("Origin (IATA)", text: $origin)
+                    TextField("Departure Airport (IATA)", text: $origin)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    TextField("Destination (IATA)", text: $destination)
+                    TextField("Destination Airport (IATA)", text: $destination)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                     DatePicker("Date", selection: $departureDate, displayedComponents: .date)
                 }
 
                 Section {
-                    Toggle("Limit flight duration", isOn: $limitDuration)
+                    Toggle("Limit Flight Duration", isOn: $limitDuration)
                     if limitDuration {
                         Stepper(value: $maxHours, in: 2...30, step: 0.5) {
                             HStack {
-                                Text("Max duration")
+                                Text("Max Duration")
                                 Spacer()
                                 Text(durationLabel)
                                     .foregroundStyle(.secondary)
@@ -41,12 +41,12 @@ struct AddFlightView: View {
                 }
 
                 Section {
-                    Toggle("Fetch price after saving", isOn: $refreshAfterSave)
+                    Toggle("Fetch Price After Saving", isOn: $refreshAfterSave)
                 } footer: {
                     Text("Prices are read by opening the Skyscanner page in WebKit. If a captcha appears, try again in a few minutes.")
                 }
             }
-            .navigationTitle("New route")
+            .navigationTitle("New Route")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
