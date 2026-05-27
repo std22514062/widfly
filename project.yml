@@ -24,6 +24,7 @@ targets:
       path: ios/Widfly/Info.plist
       properties:
         CFBundleDisplayName: Widfly
+        UILaunchStoryboardName: LaunchScreen
     attributes:
       SystemCapabilities:
         com.apple.ApplicationGroups.iOS:

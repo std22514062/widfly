@@ -7,39 +7,32 @@ struct ContentView: View {
     var body: some View {
         @Bindable var model = model
 
-        NavigationStack {
-            ZStack {
-                // Inner navy layer keeps the body filled with navy even when
-                // NavigationStack's own opaque system background would otherwise
-                // peek through. UIWindow appearance handles the safe areas.
-                Theme.background.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Theme.background.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    header
-                    content
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                header
+                content
             }
-            .toolbar(.hidden, for: .navigationBar)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showingAdd) {
-                AddFlightView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .overlay(alignment: .bottom) {
+            if let message = model.statusMessage {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Theme.background.opacity(0.96))
             }
-            .sheet(item: $model.activeSession, onDismiss: {
-                model.sessionDidDismiss()
-            }) { session in
-                RefreshSheetView(session: session)
-            }
-            .overlay(alignment: .bottom) {
-                if let message = model.statusMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Theme.background.opacity(0.96))
-                }
-            }
+        }
+        .sheet(isPresented: $showingAdd) {
+            AddFlightView()
+        }
+        .sheet(item: $model.activeSession, onDismiss: {
+            model.sessionDidDismiss()
+        }) { session in
+            RefreshSheetView(session: session)
         }
         .preferredColorScheme(.dark)
     }
@@ -69,7 +62,8 @@ struct ContentView: View {
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 4)
+        .padding(.top, 12)
+        .safeAreaPadding(.top, 8)
         .padding(.bottom, 18)
     }
 
