@@ -209,7 +209,7 @@ final class SkyscannerDetailSession: Identifiable {
           function durationMatches(text) {
             if (!duration) return true;
             var wanted = parseInt(duration, 10);
-            var rx = /(\\d+)\\s*(?:saat|sa\\.|h\\b)\\s*(?:(\\d+)\\s*(?:dakika|dk\\.|m\\b))?/gi;
+            var rx = /(\\d+)\\s*(?:saat|sa\\.?|h\\b)\\s*(?:(\\d+)\\s*(?:dakika|dk\\.?|m\\b))?/gi;
             var m;
             while ((m = rx.exec(text || '')) !== null) {
               var total = parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);

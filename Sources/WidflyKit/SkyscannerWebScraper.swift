@@ -229,8 +229,8 @@ public final class SkyscannerWebScraper: NSObject {
         return out;
       }
 
-      // Matches "4 sa. 36 dk.", "4 saat 36 dakika", "7h 30m".
-      var durRxGlobal = /(\\d+)\\s*(?:saat|sa\\.|h\\b)\\s*(?:(\\d+)\\s*(?:dakika|dk\\.|m\\b))?/gi;
+      // Matches "4 sa. 36 dk.", "4 sa 36 dk", "4 saat 36 dakika", "7h 30m".
+      var durRxGlobal = /(\\d+)\\s*(?:saat|sa\\.?|h\\b)\\s*(?:(\\d+)\\s*(?:dakika|dk\\.?|m\\b))?/gi;
       function durationsIn(text) {
         var out = [];
         if (!text) return out;
@@ -253,15 +253,19 @@ public final class SkyscannerWebScraper: NSObject {
       // Detect "ticket card" leaf containers: elements whose textContent has
       // both a duration and a currency reference, but no child does. These are
       // the smallest DOM nodes that fully describe a single Skyscanner result.
-      var durProbe = /\\d+\\s*(?:saat|sa\\.|h\\b)/i;
+      var durProbe = /\\d+\\s*(?:saat|sa\\.?|h\\b)/i;
       var curProbe = /(?:₺|TL\\b|TRY\\b|\\$|€|£)/i;
+      var sortSummaryProbe = /(?:best|cheapest|fastest)\\s+(?:flight|uçuş)|(?:en\\s+iyi|en\\s+ucuz|en\\s+hızlı)|sıralay(?:ın|in)?|sort\\s+by/i;
+      var resultCardProbe = /teklif|offer|view\\s*deal|aktarma|aktarmasız|stop|direkt|direct|nonstop/i;
       var elements = document.body ? document.body.querySelectorAll('*') : [];
-      var cards = [];
+      var strictCards = [];
+      var fallbackCards = [];
       for (var i = 0; i < elements.length; i++) {
         var el = elements[i];
         var t = el.textContent || '';
         if (t.length < 10 || t.length > 2000) continue;
         if (!durProbe.test(t) || !curProbe.test(t)) continue;
+        if (sortSummaryProbe.test(t)) continue;
         var hasChildBoth = false;
         var children = el.children;
         for (var j = 0; j < children.length; j++) {
@@ -269,8 +273,12 @@ public final class SkyscannerWebScraper: NSObject {
           if (ct.length < 10 || ct.length > 2000) continue;
           if (durProbe.test(ct) && curProbe.test(ct)) { hasChildBoth = true; break; }
         }
-        if (!hasChildBoth) cards.push(el);
+        if (!hasChildBoth) {
+          if (resultCardProbe.test(t)) strictCards.push(el);
+          else fallbackCards.push(el);
+        }
       }
+      var cards = strictCards.length ? strictCards : fallbackCards;
 
       function absoluteURL(href) {
         if (!href) return null;
@@ -316,15 +324,55 @@ public final class SkyscannerWebScraper: NSObject {
         return lines.length ? lines.slice(0, 2).join(' · ') : null;
       }
 
+      function airlineNameIn(text) {
+        var known = [
+          'AJet',
+          'Pegasus Airlines',
+          'Turkish Airlines',
+          'SunExpress',
+          'KLM',
+          'Transavia',
+          'Lufthansa',
+          'British Airways',
+          'Air France',
+          'Qatar Airways',
+          'Emirates',
+          'easyJet',
+          'Ryanair'
+        ];
+        for (var i = 0; i < known.length; i++) {
+          if ((text || '').indexOf(known[i]) >= 0) return known[i];
+        }
+        var rawLines = (text || '').split(/\\n+/);
+        for (var j = 0; j < rawLines.length; j++) {
+          var line = rawLines[j].replace(/\\s+/g, ' ').trim();
+          if (!line || line.length > 45) continue;
+          if (/airlines?|airways?|jet|express|transavia|pegasus|lufthansa|klm/i.test(line)) return line;
+        }
+        return null;
+      }
+
+      function pricesForCard(el) {
+        var node = el;
+        var depth = 0;
+        while (node && node !== document.body && depth <= 4) {
+          var prs = pricesIn(node.textContent || '');
+          if (prs.length) return prs;
+          node = node.parentElement;
+          depth++;
+        }
+        return [];
+      }
+
       var eligible = [];
       for (var k = 0; k < cards.length; k++) {
         var card = cards[k];
         var ct2 = card.textContent || '';
         var durs = durationsIn(ct2);
+        var prs = pricesForCard(card);
         if (!durs.length) continue;
         var maxDur = Math.max.apply(null, durs);
         if (maxMinutes > 0 && maxDur > maxMinutes) continue;
-        var prs = pricesIn(ct2);
         if (!prs.length) continue;
         var cardTimes = timesIn(ct2);
         eligible.push({
@@ -334,6 +382,7 @@ public final class SkyscannerWebScraper: NSObject {
           departureTime: cardTimes.length > 0 ? cardTimes[0] : null,
           arrivalTime: cardTimes.length > 1 ? cardTimes[1] : null,
           stopsSummary: stopsSummaryIn(ct2),
+          airlineName: airlineNameIn(ct2),
           bookingURL: bookingURLFor(card),
           cardIndex: k
         });

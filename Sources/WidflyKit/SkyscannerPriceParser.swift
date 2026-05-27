@@ -8,6 +8,7 @@ public struct SkyscannerPriceResult: Sendable {
     public var arrivalTime: String?
     public var durationMinutes: Int?
     public var stopsSummary: String?
+    public var airlineName: String?
 
     public init(
         amount: Decimal,
@@ -16,7 +17,8 @@ public struct SkyscannerPriceResult: Sendable {
         departureTime: String? = nil,
         arrivalTime: String? = nil,
         durationMinutes: Int? = nil,
-        stopsSummary: String? = nil
+        stopsSummary: String? = nil,
+        airlineName: String? = nil
     ) {
         self.amount = amount
         self.currency = currency
@@ -25,6 +27,7 @@ public struct SkyscannerPriceResult: Sendable {
         self.arrivalTime = arrivalTime
         self.durationMinutes = durationMinutes
         self.stopsSummary = stopsSummary
+        self.airlineName = airlineName
     }
 }
 
@@ -47,7 +50,8 @@ public enum SkyscannerPriceParser {
                 departureTime: nonEmptyString(from: object["departureTime"]),
                 arrivalTime: nonEmptyString(from: object["arrivalTime"]),
                 durationMinutes: int(from: object["durationMinutes"]),
-                stopsSummary: nonEmptyString(from: object["stopsSummary"])
+                stopsSummary: nonEmptyString(from: object["stopsSummary"]),
+                airlineName: nonEmptyString(from: object["airlineName"])
             )
         }
 

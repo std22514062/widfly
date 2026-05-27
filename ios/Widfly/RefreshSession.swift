@@ -59,7 +59,8 @@ final class RefreshSession: Identifiable {
                     departureTime: result.departureTime,
                     arrivalTime: result.arrivalTime,
                     durationMinutes: result.durationMinutes,
-                    stopsSummary: result.stopsSummary
+                    stopsSummary: result.stopsSummary,
+                    airlineName: result.airlineName
                 )
                 let priceText = PriceFormatting.string(amount: result.amount, currency: result.currency)
                 statusMessage = progressPrefix + "✓ \(flight.routeLabel) — \(priceText)"

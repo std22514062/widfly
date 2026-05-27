@@ -1,8 +1,14 @@
 import SwiftUI
+import WidflyKit
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     @State private var showingAdd = false
+    @State private var detailSession: SkyscannerDetailSession?
+    @State private var resolvingFlightID: UUID?
+    @State private var editMode: EditMode = .inactive
+    @State private var editingFlight: TrackedFlight?
 
     var body: some View {
         @Bindable var model = model
@@ -17,7 +23,7 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .overlay(alignment: .bottom) {
-            if let message = model.statusMessage {
+            if let message = model.statusMessage, !model.flights.isEmpty {
                 Text(message)
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.7))
@@ -26,8 +32,29 @@ struct ContentView: View {
                     .background(Theme.background.opacity(0.96))
             }
         }
+        .overlay(alignment: .topLeading) {
+            if let detailSession {
+                SkyscannerExternalOpenerBackgroundView(
+                    session: detailSession,
+                    onResolved: { url in
+                        if let flight = model.flights.first(where: { $0.id == detailSession.flight.id }) {
+                            model.updateBookingURL(for: flight, url: url)
+                        }
+                    },
+                    onFinish: {
+                        resolvingFlightID = nil
+                        self.detailSession = nil
+                    }
+                )
+            }
+        }
         .sheet(isPresented: $showingAdd) {
             AddFlightView()
+        }
+        .sheet(item: $editingFlight) { flight in
+            EditFlightView(flight: flight) { updated in
+                model.updateFlight(updated)
+            }
         }
         .sheet(item: $model.activeSession, onDismiss: {
             model.sessionDidDismiss()
@@ -48,6 +75,12 @@ struct ContentView: View {
                     isHidden: model.flights.isEmpty
                 ) {
                     model.refreshAll()
+                }
+
+                if !model.flights.isEmpty {
+                    CircularGlassButton(systemName: editMode == .active ? "checkmark" : "arrow.up.arrow.down") {
+                        editMode = editMode == .active ? .inactive : .active
+                    }
                 }
 
                 Spacer()
@@ -106,8 +139,19 @@ struct ContentView: View {
                     onRefresh: {
                         model.refresh(flight: flight)
                     },
-                    onBookingURLResolved: { url in
-                        model.updateBookingURL(for: flight, url: url)
+                    onEdit: {
+                        editingFlight = flight
+                    },
+                    isOpeningSkyscanner: resolvingFlightID == flight.id,
+                    onOpenSkyscanner: {
+                        if let rawURL = flight.bookingURL,
+                           let url = URL(string: rawURL),
+                           rawURL.contains("/config/") {
+                            openURL(url)
+                        } else {
+                            resolvingFlightID = flight.id
+                            detailSession = SkyscannerDetailSession(flight: flight)
+                        }
                     }
                 )
                 .listRowBackground(Color.clear)
@@ -115,9 +159,14 @@ struct ContentView: View {
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
             .onDelete(perform: model.deleteFlights)
+            .onMove(perform: model.moveFlights)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .environment(\.editMode, $editMode)
+        .refreshable {
+            model.refreshAll()
+        }
     }
 }
 

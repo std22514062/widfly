@@ -4,14 +4,15 @@ import WidflyKit
 struct FlightRowView: View {
     let flight: TrackedFlight
     let onRefresh: () -> Void
-    let onBookingURLResolved: (URL) -> Void
-    @Environment(\.openURL) private var openURL
-    @State private var detailSession: SkyscannerDetailSession?
+    let onEdit: () -> Void
+    let isOpeningSkyscanner: Bool
+    let onOpenSkyscanner: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             iataRow
             metaRow
+            airlineRow
             itineraryDetails
             priceRow
             bookingLink
@@ -62,6 +63,31 @@ struct FlightRowView: View {
     }
 
     @ViewBuilder
+    private var airlineRow: some View {
+        if let airlineName = flight.airlineName {
+            HStack(spacing: 8) {
+                airlineLogoPlaceholder
+                Text(airlineName)
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var airlineLogoPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(.white.opacity(0.14))
+            .overlay(
+                Text(airlineInitial)
+                    .font(.system(size: 11, weight: .black, design: .default))
+                    .foregroundStyle(Theme.amber)
+            )
+            .frame(width: 24, height: 24)
+    }
+
+    @ViewBuilder
     private var itineraryDetails: some View {
         let hasTimes = flight.departureTime != nil || flight.arrivalTime != nil
         let hasStops = flight.stopsSummary != nil
@@ -98,6 +124,17 @@ struct FlightRowView: View {
             priceView
             deltaPill
             Spacer()
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle()
+                            .fill(.white.opacity(0.10))
+                    )
+            }
+            .buttonStyle(.plain)
             Button(action: onRefresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 16, weight: .bold))
@@ -115,11 +152,19 @@ struct FlightRowView: View {
     @ViewBuilder
     private var priceView: some View {
         if let price = flight.lastPrice {
-            Text(PriceFormatting.string(amount: price, currency: flight.currencyCode))
-                .font(.price(size: 26))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            VStack(alignment: .leading, spacing: 1) {
+                if let previous = flight.previousPrice, previous != price {
+                    Text(PriceFormatting.string(amount: previous, currency: flight.currencyCode))
+                        .font(.system(size: 12, weight: .bold, design: .default).monospacedDigit())
+                        .foregroundStyle(Theme.mutedText)
+                        .strikethrough(true, color: Theme.mutedText)
+                }
+                Text(PriceFormatting.string(amount: price, currency: flight.currencyCode))
+                    .font(.price(size: 26))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         } else if flight.lastError != nil {
             Text("—")
                 .font(.price(size: 26))
@@ -159,22 +204,14 @@ struct FlightRowView: View {
 
     @ViewBuilder
     private var bookingLink: some View {
-        Button {
-            if let rawURL = flight.bookingURL,
-               let url = URL(string: rawURL),
-               rawURL.contains("/config/") {
-                openURL(url)
-            } else {
-                detailSession = SkyscannerDetailSession(flight: flight)
-            }
-        } label: {
+        Button(action: onOpenSkyscanner) {
             HStack(spacing: 7) {
                 Image(systemName: "ticket")
                     .font(.system(size: 11, weight: .bold))
-                Text(detailSession?.statusMessage ?? "Open on Skyscanner")
+                Text(isOpeningSkyscanner ? "Opening Skyscanner..." : "Open on Skyscanner")
                     .font(.system(size: 12, weight: .bold, design: .default))
                 Spacer(minLength: 0)
-                if detailSession?.isResolving == true {
+                if isOpeningSkyscanner {
                     ProgressView()
                         .controlSize(.mini)
                         .tint(Theme.amber)
@@ -196,16 +233,7 @@ struct FlightRowView: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(detailSession?.isResolving == true)
-        .sheet(item: $detailSession) { session in
-            SkyscannerExternalOpenerSheetView(
-                session: session,
-                onResolved: onBookingURLResolved,
-                onFinish: {
-                    detailSession = nil
-                }
-            )
-        }
+        .disabled(isOpeningSkyscanner)
     }
 
     @ViewBuilder
@@ -234,5 +262,10 @@ struct FlightRowView: View {
         flight.departureDate
             .formatted(date: .abbreviated, time: .omitted)
             .uppercased()
+    }
+
+    private var airlineInitial: String {
+        guard let first = flight.airlineName?.first else { return "A" }
+        return String(first)
     }
 }

@@ -20,12 +20,13 @@ final class AppModel {
         flights = FlightStore.load()
     }
 
+    @discardableResult
     func addFlight(
         origin: String,
         destination: String,
         departureDate: Date,
         maxDurationMinutes: Int? = 8 * 60
-    ) {
+    ) -> TrackedFlight {
         let flight = TrackedFlight(
             origin: origin.trimmingCharacters(in: .whitespacesAndNewlines),
             destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -34,6 +35,7 @@ final class AppModel {
         )
         flights.append(flight)
         persist()
+        return flight
     }
 
     func deleteFlights(at offsets: IndexSet) {
@@ -46,8 +48,23 @@ final class AppModel {
         persist()
     }
 
+    func moveFlights(from source: IndexSet, to destination: Int) {
+        flights.move(fromOffsets: source, toOffset: destination)
+        persist()
+    }
+
+    func updateFlight(_ flight: TrackedFlight) {
+        guard let i = flights.firstIndex(where: { $0.id == flight.id }) else { return }
+        flights[i] = flight
+        persist()
+    }
+
     func refresh(flight: TrackedFlight) {
         startRefresh(flights: [flight])
+    }
+
+    func refresh(flights: [TrackedFlight]) {
+        startRefresh(flights: flights)
     }
 
     func refreshAll() {

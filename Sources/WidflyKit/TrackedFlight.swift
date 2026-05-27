@@ -23,6 +23,8 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
     public var durationMinutes: Int?
     /// Transfer/stopover summary extracted from the selected result card.
     public var stopsSummary: String?
+    /// Carrier name extracted from the selected result card.
+    public var airlineName: String?
 
     public init(
         id: UUID = UUID(),
@@ -39,7 +41,8 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         departureTime: String? = nil,
         arrivalTime: String? = nil,
         durationMinutes: Int? = nil,
-        stopsSummary: String? = nil
+        stopsSummary: String? = nil,
+        airlineName: String? = nil
     ) {
         self.id = id
         self.origin = origin.uppercased()
@@ -56,6 +59,7 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         self.arrivalTime = arrivalTime
         self.durationMinutes = durationMinutes
         self.stopsSummary = stopsSummary
+        self.airlineName = airlineName
     }
 
     public var routeLabel: String {
@@ -91,7 +95,8 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         departureTime: String? = nil,
         arrivalTime: String? = nil,
         durationMinutes: Int? = nil,
-        stopsSummary: String? = nil
+        stopsSummary: String? = nil,
+        airlineName: String? = nil
     ) {
         if let lastPrice, lastPrice != price {
             previousPrice = lastPrice
@@ -104,6 +109,7 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         self.arrivalTime = arrivalTime
         self.durationMinutes = durationMinutes
         self.stopsSummary = stopsSummary
+        self.airlineName = airlineName
         lastError = nil
     }
 
