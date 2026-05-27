@@ -52,7 +52,15 @@ final class RefreshSession: Identifiable {
                     options: options
                 )
                 if isCancelled { break }
-                updated.applyFetchedPrice(result.amount, currency: result.currency)
+                updated.applyFetchedPrice(
+                    result.amount,
+                    currency: result.currency,
+                    bookingURL: result.bookingURL,
+                    departureTime: result.departureTime,
+                    arrivalTime: result.arrivalTime,
+                    durationMinutes: result.durationMinutes,
+                    stopsSummary: result.stopsSummary
+                )
                 let priceText = PriceFormatting.string(amount: result.amount, currency: result.currency)
                 statusMessage = progressPrefix + "✓ \(flight.routeLabel) — \(priceText)"
             } catch {

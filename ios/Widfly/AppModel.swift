@@ -54,6 +54,12 @@ final class AppModel {
         startRefresh(flights: flights)
     }
 
+    func updateBookingURL(for flight: TrackedFlight, url: URL) {
+        guard let i = flights.firstIndex(where: { $0.id == flight.id }) else { return }
+        flights[i].bookingURL = url.absoluteString
+        persist()
+    }
+
     func sessionDidDismiss() {
         activeSession = nil
     }

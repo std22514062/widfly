@@ -2,13 +2,13 @@
 
 Kişisel uçuş fiyat takibi: **rota + tarih** kaydet, **Skyscanner** üzerinden en düşük fiyatı **WebKit** ile oku, **iPhone widget**’ında göster.
 
-> Skyscanner scraping kişisel kullanım içindir. Site yapısı veya bot koruması değişirse scraper güncellenmelidir. Captcha görürsen bir süre bekleyip uygulamadan tekrar dene.
+>  Kişisel kullanım içindir. Site yapısı veya bot koruması değişirse scraper güncellenmelidir. Captcha görürsen bir süre bekleyip uygulamadan tekrar dene.
 
 ## Gereksinimler
 
 - macOS + **Xcode** (App Store, ücretsiz)
 - iPhone (iOS 17+)
-- Ücretsiz Apple ID ile cihaza yükleme (7 günde bir Xcode’dan yenileme gerekebilir)
+- Ücretsiz Apple ID ile cihaza yükleme.
 
 ## Kurulum
 

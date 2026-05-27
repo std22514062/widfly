@@ -150,8 +150,11 @@ public final class SkyscannerWebScraper: NSObject {
             let value = try await webView.evaluateJavaScript(script)
             let json = value as? String
 
-            if let json,
-               let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+            let object = json.flatMap {
+                try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any]
+            }
+
+            if let object,
                object["blocked"] as? Bool == true {
                 if !options.interactive {
                     finish(with: .failure(SkyscannerScraperError.captchaOrBlocked))
@@ -269,20 +272,79 @@ public final class SkyscannerWebScraper: NSObject {
         if (!hasChildBoth) cards.push(el);
       }
 
+      function absoluteURL(href) {
+        if (!href) return null;
+        try { return new URL(href, window.location.href).href; } catch (e) { return null; }
+      }
+
+      function bookingURLFor(el) {
+        var node = el;
+        while (node && node !== document.body) {
+          if (node.tagName === 'A') {
+            var own = absoluteURL(node.getAttribute('href'));
+            if (own && own.indexOf('/config/') >= 0) return own;
+          }
+          var descendant = node.querySelector ? node.querySelector('a[href*="/config/"]') : null;
+          if (descendant) {
+            var desc = absoluteURL(descendant.getAttribute('href'));
+            if (desc) return desc;
+          }
+          node = node.parentElement;
+        }
+        return null;
+      }
+
+      function timesIn(text) {
+        var matches = (text || '').match(/\\b(?:[01]?\\d|2[0-3]):[0-5]\\d\\b/g) || [];
+        var unique = [];
+        for (var i = 0; i < matches.length; i++) {
+          if (unique.indexOf(matches[i]) < 0) unique.push(matches[i]);
+        }
+        return unique;
+      }
+
+      function stopsSummaryIn(text) {
+        var rawLines = (text || '').split(/\\n+/);
+        var lines = [];
+        for (var i = 0; i < rawLines.length; i++) {
+          var line = rawLines[i].replace(/\\s+/g, ' ').trim();
+          if (!line || line.length > 90) continue;
+          priceRx.lastIndex = 0;
+          if (priceRx.test(line)) { priceRx.lastIndex = 0; continue; }
+          if (/aktarma|stop|direct|direkt|nonstop|havaliman|airport|change/i.test(line)) lines.push(line);
+        }
+        return lines.length ? lines.slice(0, 2).join(' · ') : null;
+      }
+
       var eligible = [];
       for (var k = 0; k < cards.length; k++) {
-        var ct2 = cards[k].textContent || '';
+        var card = cards[k];
+        var ct2 = card.textContent || '';
         var durs = durationsIn(ct2);
         if (!durs.length) continue;
         var maxDur = Math.max.apply(null, durs);
         if (maxMinutes > 0 && maxDur > maxMinutes) continue;
         var prs = pricesIn(ct2);
         if (!prs.length) continue;
-        eligible.push(Math.min.apply(null, prs));
+        var cardTimes = timesIn(ct2);
+        eligible.push({
+          amount: Math.min.apply(null, prs),
+          currency: currency,
+          durationMinutes: maxDur,
+          departureTime: cardTimes.length > 0 ? cardTimes[0] : null,
+          arrivalTime: cardTimes.length > 1 ? cardTimes[1] : null,
+          stopsSummary: stopsSummaryIn(ct2),
+          bookingURL: bookingURLFor(card),
+          cardIndex: k
+        });
       }
 
       if (eligible.length) {
-        return JSON.stringify({ found: true, amount: Math.min.apply(null, eligible), currency: currency });
+        eligible.sort(function(a, b) { return a.amount - b.amount; });
+        var best = eligible[0];
+        best.found = true;
+        delete best.cardIndex;
+        return JSON.stringify(best);
       }
 
       // No card matched the duration constraint. If a constraint was requested,
@@ -292,8 +354,14 @@ public final class SkyscannerWebScraper: NSObject {
       }
 
       var bodyPrices = pricesIn(body);
-      if (!bodyPrices.length) return JSON.stringify({ found: false });
-      return JSON.stringify({ found: true, amount: Math.min.apply(null, bodyPrices), currency: currency });
+      if (!bodyPrices.length) {
+        return JSON.stringify({ found: false });
+      }
+      return JSON.stringify({
+        found: true,
+        amount: Math.min.apply(null, bodyPrices),
+        currency: currency
+      });
     })();
     """
     }

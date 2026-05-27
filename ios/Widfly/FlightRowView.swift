@@ -4,12 +4,17 @@ import WidflyKit
 struct FlightRowView: View {
     let flight: TrackedFlight
     let onRefresh: () -> Void
+    let onBookingURLResolved: (URL) -> Void
+    @Environment(\.openURL) private var openURL
+    @State private var detailSession: SkyscannerDetailSession?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             iataRow
             metaRow
+            itineraryDetails
             priceRow
+            bookingLink
             footerRow
         }
         .padding(.horizontal, 18)
@@ -49,15 +54,43 @@ struct FlightRowView: View {
     private var metaRow: some View {
         HStack(spacing: 6) {
             Text(dateText)
-            if let limit = flight.maxDurationLabel {
-                Text("·")
-                Text(limit.uppercased())
-            }
             Spacer()
         }
         .font(.system(size: 12, weight: .bold, design: .default))
         .foregroundStyle(Theme.mutedText)
         .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private var itineraryDetails: some View {
+        let hasTimes = flight.departureTime != nil || flight.arrivalTime != nil
+        let hasStops = flight.stopsSummary != nil
+        let hasDuration = flight.fetchedDurationLabel != nil
+
+        if hasTimes || hasStops || hasDuration {
+            VStack(alignment: .leading, spacing: 4) {
+                if hasTimes {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("\(flight.departureTime ?? "—") → \(flight.arrivalTime ?? "—")")
+                    }
+                }
+
+                HStack(spacing: 6) {
+                    if let duration = flight.fetchedDurationLabel {
+                        Label(duration.uppercased(), systemImage: "timer")
+                    }
+                    if let stops = flight.stopsSummary {
+                        Text(stops)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+            }
+            .font(.system(size: 11, weight: .bold, design: .default))
+            .foregroundStyle(.white.opacity(0.68))
+        }
     }
 
     private var priceRow: some View {
@@ -120,6 +153,57 @@ struct FlightRowView: View {
                         Capsule(style: .continuous)
                             .strokeBorder(tint.opacity(0.35), lineWidth: 0.6)
                     )
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var bookingLink: some View {
+        Button {
+            if let rawURL = flight.bookingURL,
+               let url = URL(string: rawURL),
+               rawURL.contains("/config/") {
+                openURL(url)
+            } else {
+                detailSession = SkyscannerDetailSession(flight: flight)
+            }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "ticket")
+                    .font(.system(size: 11, weight: .bold))
+                Text(detailSession?.statusMessage ?? "Open on Skyscanner")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                Spacer(minLength: 0)
+                if detailSession?.isResolving == true {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(Theme.amber)
+                } else {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+            }
+            .foregroundStyle(Theme.amber)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Theme.amber.opacity(0.13))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(Theme.amber.opacity(0.28), lineWidth: 0.6)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(detailSession?.isResolving == true)
+        .sheet(item: $detailSession) { session in
+            SkyscannerExternalOpenerSheetView(
+                session: session,
+                onResolved: onBookingURLResolved,
+                onFinish: {
+                    detailSession = nil
+                }
             )
         }
     }

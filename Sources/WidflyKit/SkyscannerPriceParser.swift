@@ -3,10 +3,28 @@ import Foundation
 public struct SkyscannerPriceResult: Sendable {
     public var amount: Decimal
     public var currency: String
+    public var bookingURL: String?
+    public var departureTime: String?
+    public var arrivalTime: String?
+    public var durationMinutes: Int?
+    public var stopsSummary: String?
 
-    public init(amount: Decimal, currency: String) {
+    public init(
+        amount: Decimal,
+        currency: String,
+        bookingURL: String? = nil,
+        departureTime: String? = nil,
+        arrivalTime: String? = nil,
+        durationMinutes: Int? = nil,
+        stopsSummary: String? = nil
+    ) {
         self.amount = amount
         self.currency = currency
+        self.bookingURL = bookingURL
+        self.departureTime = departureTime
+        self.arrivalTime = arrivalTime
+        self.durationMinutes = durationMinutes
+        self.stopsSummary = stopsSummary
     }
 }
 
@@ -22,10 +40,35 @@ public enum SkyscannerPriceParser {
 
         if let amount = decimal(from: object["amount"]) {
             let currency = (object["currency"] as? String) ?? fallbackCurrency
-            return SkyscannerPriceResult(amount: amount, currency: currency)
+            return SkyscannerPriceResult(
+                amount: amount,
+                currency: currency,
+                bookingURL: nonEmptyString(from: object["bookingURL"]),
+                departureTime: nonEmptyString(from: object["departureTime"]),
+                arrivalTime: nonEmptyString(from: object["arrivalTime"]),
+                durationMinutes: int(from: object["durationMinutes"]),
+                stopsSummary: nonEmptyString(from: object["stopsSummary"])
+            )
         }
 
         return nil
+    }
+
+    private static func nonEmptyString(from value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func int(from value: Any?) -> Int? {
+        switch value {
+        case let number as NSNumber:
+            return number.intValue
+        case let string as String:
+            return Int(string)
+        default:
+            return nil
+        }
     }
 
     private static func decimal(from value: Any?) -> Decimal? {
