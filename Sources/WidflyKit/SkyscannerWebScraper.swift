@@ -19,7 +19,7 @@ public enum SkyscannerScraperError: LocalizedError {
         case .captchaOrBlocked:
             return "Skyscanner blocked access (captcha). Open the app and try again, or wait a few minutes."
         case .priceNotFound:
-            return "No price found for this route."
+            return "No flights match your filters for this route."
         case .timedOut:
             return "Timed out while loading the price."
         }
@@ -34,7 +34,7 @@ public final class SkyscannerWebScraper: NSObject {
     private var options: SkyscannerSearchOptions = .turkey
     private var startedAt = Date()
     private let headlessTimeout: TimeInterval = 45
-    private let interactiveTimeout: TimeInterval = 300
+    private let interactiveTimeout: TimeInterval = 60
     private let pollIntervalNanoseconds: UInt64 = 2_000_000_000
 
     private var targetURL: URL?
@@ -145,7 +145,9 @@ public final class SkyscannerWebScraper: NSObject {
         do {
             let script = Self.extractPriceJavaScript(
                 currency: currency,
-                maxDurationMinutes: options.maxDurationMinutes
+                maxDurationMinutes: options.maxDurationMinutes,
+                departureTimeFilter: options.departureTimeFilter?.jsToken,
+                arrivalTimeFilter: options.arrivalTimeFilter?.jsToken
             )
             let value = try await webView.evaluateJavaScript(script)
             let json = value as? String
@@ -162,6 +164,14 @@ public final class SkyscannerWebScraper: NSObject {
                 }
                 // In interactive mode, keep polling so user can solve the challenge.
             }
+
+            if let object, let found = object["found"] as? Bool, !found {
+                if object["explicitNoFlights"] as? Bool == true {
+                    finish(with: .failure(SkyscannerScraperError.priceNotFound))
+                    return
+                }
+            }
+
             if let json, let result = SkyscannerPriceParser.parse(json: json, fallbackCurrency: currency) {
                 finish(with: .success(result))
             }
@@ -184,13 +194,35 @@ public final class SkyscannerWebScraper: NSObject {
         }
     }
 
-    private static func extractPriceJavaScript(currency: String, maxDurationMinutes: Int?) -> String {
+    private static func extractPriceJavaScript(
+        currency: String,
+        maxDurationMinutes: Int?,
+        departureTimeFilter: String?,
+        arrivalTimeFilter: String?
+    ) -> String {
         let safeCurrency = currency.replacingOccurrences(of: "'", with: "")
         let maxValue = maxDurationMinutes.map(String.init) ?? "0"
+        let depFilter = departureTimeFilter ?? ""
+        let arrFilter = arrivalTimeFilter ?? ""
         return """
     (function() {
       var currency = '\(safeCurrency)';
       var maxMinutes = \(maxValue);
+      var depFilter = '\(depFilter)';
+      var arrFilter = '\(arrFilter)';
+
+      function timeMatches(timeStr, filterToken) {
+        if (!filterToken) return true;
+        if (!timeStr) return false;
+        var parts = timeStr.split(':');
+        if (parts.length < 2) return true;
+        var h = parseInt(parts[0], 10);
+        if (isNaN(h)) return true;
+        if (filterToken === 'morning') return h >= 6 && h < 12;
+        if (filterToken === 'afternoon') return h >= 12 && h < 18;
+        if (filterToken === 'evening') return h >= 18 || h < 6;
+        return true;
+      }
 
       function parseAmount(text) {
         if (!text) return null;
@@ -375,6 +407,11 @@ public final class SkyscannerWebScraper: NSObject {
         if (maxMinutes > 0 && maxDur > maxMinutes) continue;
         if (!prs.length) continue;
         var cardTimes = timesIn(ct2);
+        var dTime = cardTimes.length > 0 ? cardTimes[0] : null;
+        var aTime = cardTimes.length > 1 ? cardTimes[1] : null;
+        if (!timeMatches(dTime, depFilter)) continue;
+        if (!timeMatches(aTime, arrFilter)) continue;
+        
         eligible.push({
           amount: Math.min.apply(null, prs),
           currency: currency,
@@ -396,10 +433,15 @@ public final class SkyscannerWebScraper: NSObject {
         return JSON.stringify(best);
       }
 
-      // No card matched the duration constraint. If a constraint was requested,
-      // do not fall back to body-wide scan (could return an over-long flight).
-      if (maxMinutes > 0) {
-        return JSON.stringify({ found: false });
+      // Check if Skyscanner explicitly says no flights found
+      var noFlightsRx = /maalesef|üzgünüz|bulamadık|no\\s*flights|couldn'?t\\s*find|0\\s*sonuç|0\\s*result/i;
+      if (noFlightsRx.test(body)) {
+        return JSON.stringify({ found: false, explicitNoFlights: true });
+      }
+
+      // Results loaded but none matched duration/time filters — fail fast.
+      if (cards.length > 0 && (maxMinutes > 0 || depFilter || arrFilter)) {
+        return JSON.stringify({ found: false, explicitNoFlights: true });
       }
 
       var bodyPrices = pricesIn(body);

@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var resolvingFlightID: UUID?
     @State private var editMode: EditMode = .inactive
     @State private var editingFlight: TrackedFlight?
+    @State private var detailedFlight: TrackedFlight?
 
     var body: some View {
         @Bindable var model = model
@@ -55,6 +56,9 @@ struct ContentView: View {
             EditFlightView(flight: flight) { updated in
                 model.updateFlight(updated)
             }
+        }
+        .sheet(item: $detailedFlight) { flight in
+            FlightDetailView(flight: flight)
         }
         .sheet(item: $model.activeSession, onDismiss: {
             model.sessionDidDismiss()
@@ -154,6 +158,10 @@ struct ContentView: View {
                         }
                     }
                 )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    detailedFlight = flight
+                }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -202,5 +210,105 @@ private struct CircularGlassButton: View {
         .disabled(isLoading)
         .opacity(isHidden ? 0 : 1)
         .accessibilityHidden(isHidden)
+    }
+}
+
+struct FlightDetailView: View {
+    let flight: TrackedFlight
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    LabeledContent("Origin", value: airportName(flight.origin))
+                    LabeledContent("Destination", value: airportName(flight.destination))
+                    LabeledContent("Date", value: flight.departureDate.formatted(date: .abbreviated, time: .omitted))
+                } header: {
+                    Text("Route")
+                }
+
+                if flight.departureTimeFilter != nil
+                    || flight.arrivalTimeFilter != nil
+                    || flight.maxDurationMinutes != nil {
+                    Section {
+                        if let filter = flight.departureTimeFilter {
+                            LabeledContent("Departure Window", value: filter.rawValue)
+                        } else {
+                            LabeledContent("Departure Window", value: "Any Time")
+                        }
+                        if let filter = flight.arrivalTimeFilter {
+                            LabeledContent("Arrival Window", value: filter.rawValue)
+                        } else {
+                            LabeledContent("Arrival Window", value: "Any Time")
+                        }
+                        if let maxDuration = flight.maxDurationLabel {
+                            LabeledContent("Max Duration", value: maxDuration)
+                        }
+                    } header: {
+                        Text("Search Filters")
+                    } footer: {
+                        Text("Widfly picks the cheapest Skyscanner result that matches these filters.")
+                    }
+                }
+
+                if flight.lastPrice != nil {
+                    Section {
+                        LabeledContent("Current Price", value: PriceFormatting.string(amount: flight.lastPrice!, currency: flight.currencyCode))
+                        if let prev = flight.previousPrice, prev != flight.lastPrice {
+                            LabeledContent("Previous Price", value: PriceFormatting.string(amount: prev, currency: flight.currencyCode))
+                        }
+                    } header: {
+                        Text("Price Details")
+                    }
+                }
+
+                Section {
+                    if let airline = flight.airlineName {
+                        HStack {
+                            Text("Airline")
+                            Spacer()
+                            HStack(spacing: 8) {
+                                AirlineLogo(airlineName: airline, size: 20)
+                                Text(airline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if let dep = flight.departureTime {
+                        LabeledContent("Departure", value: dep)
+                    }
+                    if let arr = flight.arrivalTime {
+                        LabeledContent("Arrival", value: arr)
+                    }
+                    if let dur = flight.fetchedDurationLabel {
+                        LabeledContent("Duration", value: dur)
+                    }
+                    if let stops = flight.stopsSummary {
+                        LabeledContent("Stops", value: stops)
+                    }
+                } header: {
+                    Text("Itinerary")
+                } footer: {
+                    if flight.lastUpdated != nil {
+                        Text("These details are extracted from the latest Skyscanner search results.")
+                    }
+                }
+            }
+            .navigationTitle("Flight Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    private func airportName(_ code: String) -> String {
+        if let resolved = AirportLookup.resolve(code) {
+            return "\(resolved.name) (\(code))"
+        }
+        return code
     }
 }

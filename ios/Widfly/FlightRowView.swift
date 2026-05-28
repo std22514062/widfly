@@ -77,14 +77,7 @@ struct FlightRowView: View {
     }
 
     private var airlineLogoPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(.white.opacity(0.14))
-            .overlay(
-                Text(airlineInitial)
-                    .font(.system(size: 11, weight: .black, design: .default))
-                    .foregroundStyle(Theme.amber)
-            )
-            .frame(width: 24, height: 24)
+        AirlineLogo(airlineName: flight.airlineName ?? "", size: 24)
     }
 
     @ViewBuilder
@@ -263,9 +256,55 @@ struct FlightRowView: View {
             .formatted(date: .abbreviated, time: .omitted)
             .uppercased()
     }
+}
 
-    private var airlineInitial: String {
-        guard let first = flight.airlineName?.first else { return "A" }
-        return String(first)
+struct AirlineLogo: View {
+    let airlineName: String
+    let size: CGFloat
+    
+    init(airlineName: String, size: CGFloat = 24) {
+        self.airlineName = airlineName
+        self.size = size
+    }
+    
+    private var domain: String {
+        let lower = airlineName.lowercased()
+        if lower.contains("turkish") || lower.contains("thy") { return "turkishairlines.com" }
+        if lower.contains("pegasus") { return "flypgs.com" }
+        if lower.contains("ajet") { return "ajet.com" }
+        if lower.contains("sunexpress") { return "sunexpress.com" }
+        if lower.contains("klm") { return "klm.com" }
+        if lower.contains("lufthansa") { return "lufthansa.com" }
+        if lower.contains("british airways") { return "britishairways.com" }
+        if lower.contains("air france") { return "airfrance.com" }
+        if lower.contains("qatar") { return "qatarairways.com" }
+        if lower.contains("emirates") { return "emirates.com" }
+        if lower.contains("easyjet") { return "easyjet.com" }
+        if lower.contains("ryanair") { return "ryanair.com" }
+        
+        // Fallback: strip common words and spaces
+        let stripped = lower
+            .replacingOccurrences(of: " airlines", with: "")
+            .replacingOccurrences(of: " airways", with: "")
+            .replacingOccurrences(of: " ", with: "")
+        return "\(stripped).com"
+    }
+
+    var body: some View {
+        AsyncImage(url: URL(string: "https://logo.clearbit.com/\(domain)?size=\(Int(size * 3))")) { image in
+            image
+                .resizable()
+                .scaledToFit()
+        } placeholder: {
+            RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
+                .fill(.white.opacity(0.14))
+                .overlay(
+                    Text(String(airlineName.first ?? "A"))
+                        .font(.system(size: size * 0.45, weight: .black, design: .default))
+                        .foregroundStyle(Theme.amber)
+                )
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.25, style: .continuous))
     }
 }

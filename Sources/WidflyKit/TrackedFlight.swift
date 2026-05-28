@@ -25,6 +25,10 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
     public var stopsSummary: String?
     /// Carrier name extracted from the selected result card.
     public var airlineName: String?
+    /// User-specified filter for departure time.
+    public var departureTimeFilter: TimeFilter?
+    /// User-specified filter for arrival time.
+    public var arrivalTimeFilter: TimeFilter?
 
     public init(
         id: UUID = UUID(),
@@ -42,7 +46,9 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         arrivalTime: String? = nil,
         durationMinutes: Int? = nil,
         stopsSummary: String? = nil,
-        airlineName: String? = nil
+        airlineName: String? = nil,
+        departureTimeFilter: TimeFilter? = nil,
+        arrivalTimeFilter: TimeFilter? = nil
     ) {
         self.id = id
         self.origin = origin.uppercased()
@@ -60,6 +66,8 @@ public struct TrackedFlight: Identifiable, Codable, Equatable, Sendable {
         self.durationMinutes = durationMinutes
         self.stopsSummary = stopsSummary
         self.airlineName = airlineName
+        self.departureTimeFilter = departureTimeFilter
+        self.arrivalTimeFilter = arrivalTimeFilter
     }
 
     public var routeLabel: String {

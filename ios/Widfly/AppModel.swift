@@ -25,13 +25,17 @@ final class AppModel {
         origin: String,
         destination: String,
         departureDate: Date,
-        maxDurationMinutes: Int? = 8 * 60
+        maxDurationMinutes: Int? = 8 * 60,
+        departureTimeFilter: TimeFilter? = nil,
+        arrivalTimeFilter: TimeFilter? = nil
     ) -> TrackedFlight {
         let flight = TrackedFlight(
             origin: origin.trimmingCharacters(in: .whitespacesAndNewlines),
             destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
             departureDate: departureDate,
-            maxDurationMinutes: maxDurationMinutes
+            maxDurationMinutes: maxDurationMinutes,
+            departureTimeFilter: departureTimeFilter,
+            arrivalTimeFilter: arrivalTimeFilter
         )
         flights.append(flight)
         persist()

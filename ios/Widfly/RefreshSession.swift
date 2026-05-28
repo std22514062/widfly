@@ -42,6 +42,8 @@ final class RefreshSession: Identifiable {
             var options = SkyscannerSearchOptions.turkeyInteractive
             options.currency = flight.currencyCode
             options.maxDurationMinutes = flight.maxDurationMinutes
+            options.departureTimeFilter = flight.departureTimeFilter
+            options.arrivalTimeFilter = flight.arrivalTimeFilter
 
             var updated = flight
             do {

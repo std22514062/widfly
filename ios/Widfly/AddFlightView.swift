@@ -26,6 +26,19 @@ struct AddFlightView: View {
                             text: $segment.destination
                         )
                         dateSelector(for: $segment)
+                        
+                        Picker("Departure Time", selection: $segment.departureTimeFilter) {
+                            Text("Any Time").tag(TimeFilter?.none)
+                            ForEach(TimeFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(TimeFilter?.some(filter))
+                            }
+                        }
+                        Picker("Arrival Time", selection: $segment.arrivalTimeFilter) {
+                            Text("Any Time").tag(TimeFilter?.none)
+                            ForEach(TimeFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(TimeFilter?.some(filter))
+                            }
+                        }
                     } header: {
                         HStack {
                             Text(segmentTitle(segment))
@@ -163,7 +176,9 @@ struct AddFlightView: View {
                 origin: origin.code,
                 destination: destination.code,
                 departureDate: departureDate,
-                maxDurationMinutes: maxMinutes
+                maxDurationMinutes: maxMinutes,
+                departureTimeFilter: segment.departureTimeFilter,
+                arrivalTimeFilter: segment.arrivalTimeFilter
             )
         }
         dismiss()
@@ -180,12 +195,15 @@ private struct FlightSegmentInput: Identifiable, Equatable {
     var departureDate: Date?
     var draftDate = Date().addingTimeInterval(60 * 60 * 24 * 30)
     var isShowingDatePicker = false
+    var departureTimeFilter: TimeFilter? = nil
+    var arrivalTimeFilter: TimeFilter? = nil
 }
 
 struct AirportField: View {
     let title: String
     let placeholder: String
     @Binding var text: String
+    @FocusState private var isFocused: Bool
 
     private var suggestions: [Airport] {
         AirportLookup.suggestions(for: text)
@@ -196,12 +214,15 @@ struct AirportField: View {
             TextField(placeholder, text: $text)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+                .focused($isFocused)
 
-            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               AirportLookup.resolve(text)?.code != text.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() {
+            if isFocused,
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !suggestions.isEmpty {
                 ForEach(suggestions) { airport in
                     Button {
                         text = airport.code
+                        isFocused = false
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(airport.displayTitle)

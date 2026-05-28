@@ -8,6 +8,8 @@ public struct SkyscannerSearchOptions: Sendable {
     public var interactive: Bool
     /// Maximum total flight duration (including layovers) in minutes. `nil` disables the filter.
     public var maxDurationMinutes: Int?
+    public var departureTimeFilter: TimeFilter?
+    public var arrivalTimeFilter: TimeFilter?
 
     public init(
         marketHost: String = "www.skyscanner.com.tr",
@@ -15,7 +17,9 @@ public struct SkyscannerSearchOptions: Sendable {
         currency: String = "TRY",
         adults: Int = 1,
         interactive: Bool = false,
-        maxDurationMinutes: Int? = nil
+        maxDurationMinutes: Int? = nil,
+        departureTimeFilter: TimeFilter? = nil,
+        arrivalTimeFilter: TimeFilter? = nil
     ) {
         self.marketHost = marketHost
         self.locale = locale
@@ -23,6 +27,8 @@ public struct SkyscannerSearchOptions: Sendable {
         self.adults = max(1, adults)
         self.interactive = interactive
         self.maxDurationMinutes = maxDurationMinutes
+        self.departureTimeFilter = departureTimeFilter
+        self.arrivalTimeFilter = arrivalTimeFilter
     }
 
     public static let turkey = SkyscannerSearchOptions()

@@ -10,6 +10,8 @@ struct EditFlightView: View {
     @State private var departureDate: Date
     @State private var limitDuration: Bool
     @State private var maxHours: Double
+    @State private var departureTimeFilter: TimeFilter?
+    @State private var arrivalTimeFilter: TimeFilter?
 
     let onSave: (TrackedFlight) -> Void
 
@@ -20,6 +22,8 @@ struct EditFlightView: View {
         self._departureDate = State(initialValue: flight.departureDate)
         self._limitDuration = State(initialValue: flight.maxDurationMinutes != nil)
         self._maxHours = State(initialValue: Double(flight.maxDurationMinutes ?? 8 * 60) / 60)
+        self._departureTimeFilter = State(initialValue: flight.departureTimeFilter)
+        self._arrivalTimeFilter = State(initialValue: flight.arrivalTimeFilter)
         self.onSave = onSave
     }
 
@@ -63,6 +67,21 @@ struct EditFlightView: View {
                         }
                     }
                 }
+                
+                Section("Time Filters") {
+                    Picker("Departure Time", selection: $departureTimeFilter) {
+                        Text("Any Time").tag(TimeFilter?.none)
+                        ForEach(TimeFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(TimeFilter?.some(filter))
+                        }
+                    }
+                    Picker("Arrival Time", selection: $arrivalTimeFilter) {
+                        Text("Any Time").tag(TimeFilter?.none)
+                        ForEach(TimeFilter.allCases) { filter in
+                            Text(filter.rawValue).tag(TimeFilter?.some(filter))
+                        }
+                    }
+                }
             }
             .navigationTitle("Edit Flight")
             .toolbar {
@@ -98,6 +117,8 @@ struct EditFlightView: View {
         flight.destination = resolvedDestination.code
         flight.departureDate = departureDate
         flight.maxDurationMinutes = limitDuration ? Int(maxHours * 60) : nil
+        flight.departureTimeFilter = departureTimeFilter
+        flight.arrivalTimeFilter = arrivalTimeFilter
 
         onSave(flight)
         dismiss()
