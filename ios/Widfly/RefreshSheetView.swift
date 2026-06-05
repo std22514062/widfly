@@ -24,6 +24,9 @@ struct RefreshSheetView: View {
             }
         }
         .interactiveDismissDisabled(!session.isCompleted)
+        .onAppear {
+            Task { await session.startIfNeeded() }
+        }
         .onChange(of: session.isCompleted) { _, completed in
             guard completed else { return }
             Task {

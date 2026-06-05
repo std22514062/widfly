@@ -69,7 +69,10 @@ final class SkyscannerDetailSession: Identifiable {
             URLQueryItem(name: "inboundaltsenabled", value: "false"),
             URLQueryItem(name: "preferdirects", value: "false")
         ]
-        return components.url!
+        guard let url = components.url else {
+            return URL(string: "https://www.skyscanner.com.tr/")!
+        }
+        return url
     }
 
     private func datePathComponent(_ date: Date) -> String {

@@ -12,8 +12,28 @@ final class AppModel {
 
     var isRefreshing: Bool { activeSession != nil }
 
+    /// Most recent price fetch across all saved routes.
+    var lastDataRefreshDate: Date? {
+        flights.compactMap(\.lastUpdated).max()
+    }
+
+    var footerText: String {
+        if let statusMessage,
+           !statusMessage.isEmpty,
+           statusMessage != "Updated." {
+            return statusMessage
+        }
+        guard let date = lastDataRefreshDate else {
+            return "Not refreshed yet"
+        }
+        return Self.formatLastUpdated(date)
+    }
+
     init() {
-        reload()
+        // Defer disk I/O until after the first frame so launch never blocks UI setup.
+        Task { @MainActor in
+            reload()
+        }
     }
 
     func reload() {
@@ -99,14 +119,15 @@ final class AppModel {
         }
         session.onCompleted = { [weak self] in
             guard let self else { return }
-            self.statusMessage = session.hasError
-                ? "Some routes could not be updated."
-                : "Updated."
+            if session.hasError {
+                self.statusMessage = "Some routes could not be updated."
+            } else {
+                self.statusMessage = nil
+            }
             WidgetCenter.shared.reloadAllTimelines()
         }
 
         activeSession = session
-        Task { await session.start() }
     }
 
     private func persist() {
@@ -115,5 +136,17 @@ final class AppModel {
         } catch {
             statusMessage = "Save failed: \(error.localizedDescription)"
         }
+    }
+
+    private static func formatLastUpdated(_ date: Date) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if Calendar.current.isDateInToday(date) {
+            return "Last updated at \(time)"
+        }
+        if Calendar.current.isDateInYesterday(date) {
+            return "Last updated yesterday at \(time)"
+        }
+        let day = date.formatted(date: .abbreviated, time: .omitted)
+        return "Last updated \(day) at \(time)"
     }
 }

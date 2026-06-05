@@ -45,7 +45,7 @@ struct EditFlightView: View {
                 }
 
                 Section {
-                    readOnlyRow("Airline Name", value: flight.airlineName)
+                    airlineReadOnlyRow
                     readOnlyRow("Departure Time", value: flight.departureTime)
                     readOnlyRow("Arrival Time", value: flight.arrivalTime)
                 } header: {
@@ -122,6 +122,26 @@ struct EditFlightView: View {
 
         onSave(flight)
         dismiss()
+    }
+
+    @ViewBuilder
+    private var airlineReadOnlyRow: some View {
+        let name = flight.airlineName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        HStack {
+            Text("Airline Name")
+            Spacer()
+            if name.isEmpty {
+                Text("Fetched After Refresh")
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    AirlineLogo(airlineName: name, size: 22)
+                    Text(name)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
     }
 
     private func readOnlyRow(_ title: String, value: String?) -> some View {

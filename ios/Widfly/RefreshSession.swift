@@ -7,7 +7,6 @@ import WidflyKit
 @Observable
 final class RefreshSession: Identifiable {
     let id = UUID()
-    let webView: WKWebView
     let flights: [TrackedFlight]
 
     var currentIndex: Int = 0
@@ -15,16 +14,31 @@ final class RefreshSession: Identifiable {
     var isCompleted: Bool = false
     var hasError: Bool = false
 
-    private let scraper: SkyscannerWebScraper
+    private let scraper = SkyscannerWebScraper()
     private var isCancelled = false
+    private var didStart = false
+    private var preparedWebView: WKWebView?
 
     var onFlightUpdated: (TrackedFlight) -> Void = { _ in }
     var onCompleted: () -> Void = {}
 
+    /// Lazily created once the refresh sheet is on screen.
+    var webView: WKWebView {
+        if let preparedWebView { return preparedWebView }
+        let view = scraper.attachableWebView()
+        preparedWebView = view
+        return view
+    }
+
     init(flights: [TrackedFlight]) {
-        self.scraper = SkyscannerWebScraper()
-        self.webView = scraper.attachableWebView()
         self.flights = flights
+    }
+
+    func startIfNeeded() async {
+        guard !didStart else { return }
+        didStart = true
+        _ = webView
+        await start()
     }
 
     func start() async {

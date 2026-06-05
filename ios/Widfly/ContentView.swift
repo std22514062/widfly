@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var editMode: EditMode = .inactive
     @State private var editingFlight: TrackedFlight?
     @State private var detailedFlight: TrackedFlight?
+    @State private var isListReady = false
 
     var body: some View {
         @Bindable var model = model
@@ -24,8 +25,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .overlay(alignment: .bottom) {
-            if let message = model.statusMessage, !model.flights.isEmpty {
-                Text(message)
+            if !model.flights.isEmpty {
+                Text(model.footerText)
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity)
@@ -172,7 +173,9 @@ struct ContentView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, $editMode)
+        .onAppear { isListReady = true }
         .refreshable {
+            guard isListReady, !model.isRefreshing else { return }
             model.refreshAll()
         }
     }
@@ -252,10 +255,10 @@ struct FlightDetailView: View {
                     }
                 }
 
-                if flight.lastPrice != nil {
+                if let price = flight.lastPrice {
                     Section {
-                        LabeledContent("Current Price", value: PriceFormatting.string(amount: flight.lastPrice!, currency: flight.currencyCode))
-                        if let prev = flight.previousPrice, prev != flight.lastPrice {
+                        LabeledContent("Current Price", value: PriceFormatting.string(amount: price, currency: flight.currencyCode))
+                        if let prev = flight.previousPrice, prev != price {
                             LabeledContent("Previous Price", value: PriceFormatting.string(amount: prev, currency: flight.currencyCode))
                         }
                     } header: {

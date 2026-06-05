@@ -34,7 +34,7 @@ public final class SkyscannerWebScraper: NSObject {
     private var options: SkyscannerSearchOptions = .turkey
     private var startedAt = Date()
     private let headlessTimeout: TimeInterval = 45
-    private let interactiveTimeout: TimeInterval = 60
+    private let interactiveTimeout: TimeInterval = 120
     private let pollIntervalNanoseconds: UInt64 = 2_000_000_000
 
     private var targetURL: URL?
@@ -54,7 +54,6 @@ public final class SkyscannerWebScraper: NSObject {
     /// Must be called from the main actor.
     public func attachableWebView() -> WKWebView {
         configureWebViewIfNeeded()
-        return webView!
     }
 
     public func fetchLowestPrice(
@@ -78,11 +77,7 @@ public final class SkyscannerWebScraper: NSObject {
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
-            configureWebViewIfNeeded()
-            guard let webView else {
-                continuation.resume(throwing: SkyscannerScraperError.webViewUnavailable)
-                return
-            }
+            let webView = configureWebViewIfNeeded()
 
             var request = URLRequest(url: url)
             request.timeoutInterval = effectiveTimeout
@@ -105,8 +100,9 @@ public final class SkyscannerWebScraper: NSObject {
         webView?.stopLoading()
     }
 
-    private func configureWebViewIfNeeded() {
-        guard webView == nil else { return }
+    @discardableResult
+    private func configureWebViewIfNeeded() -> WKWebView {
+        if let webView { return webView }
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
@@ -121,6 +117,7 @@ public final class SkyscannerWebScraper: NSObject {
         view.navigationDelegate = self
         view.isHidden = !options.interactive
         webView = view
+        return view
     }
 
     private func startPolling() {
