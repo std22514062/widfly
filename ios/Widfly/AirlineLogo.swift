@@ -79,11 +79,13 @@ enum AirlineBrandResolver {
 struct AirlineLogo: View {
     let airlineName: String
     let size: CGFloat
+    let loadsRemoteImage: Bool
     @State private var canLoadRemoteLogo = false
 
-    init(airlineName: String, size: CGFloat = 24) {
+    init(airlineName: String, size: CGFloat = 24, loadsRemoteImage: Bool = false) {
         self.airlineName = airlineName
         self.size = size
+        self.loadsRemoteImage = loadsRemoteImage
     }
 
     var body: some View {
@@ -95,7 +97,7 @@ struct AirlineLogo: View {
                         .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5)
                 )
 
-            if canLoadRemoteLogo, let clearbitURL = AirlineBrandResolver.clearbitURL(for: airlineName, size: size) {
+            if loadsRemoteImage, canLoadRemoteLogo, let clearbitURL = AirlineBrandResolver.clearbitURL(for: airlineName, size: size) {
                 AsyncImage(url: clearbitURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -115,8 +117,8 @@ struct AirlineLogo: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
-        .task {
-            try? await Task.sleep(for: .milliseconds(200))
+        .onAppear {
+            guard loadsRemoteImage else { return }
             canLoadRemoteLogo = true
         }
     }

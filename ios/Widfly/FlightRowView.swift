@@ -9,17 +9,22 @@ struct FlightRowView: View {
     let onOpenSkyscanner: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            iataRow
-            metaRow
-            airlineRow
-            itineraryDetails
+        VStack(alignment: .leading, spacing: 14) {
+            routeSection
+
+            if hasItineraryBand {
+                itineraryBand
+            }
+
             priceRow
             bookingLink
-            footerRow
+
+            if flight.lastError != nil {
+                footerRow
+            }
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
@@ -31,174 +36,166 @@ struct FlightRowView: View {
         )
     }
 
-    // MARK: - Rows
+    // MARK: - Route
 
-    private var iataRow: some View {
-        HStack(spacing: 12) {
-            Text(flight.origin)
-                .font(.iata(size: 26))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: true, vertical: false)
-            Spacer(minLength: 4)
-            Image(systemName: "airplane")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-                .fixedSize()
-            Spacer(minLength: 4)
-            Text(flight.destination)
-                .font(.iata(size: 26))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: true, vertical: false)
+    private var routeSection: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Spacer(minLength: 0)
+                actionButtons
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(flight.origin)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "airplane")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .alignmentGuide(.firstTextBaseline) { dimensions in
+                        dimensions[VerticalAlignment.center]
+                    }
+                Text(flight.destination)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .font(.iata(size: 30))
+            .foregroundStyle(.white)
+
+            HStack(spacing: 6) {
+                Text(dateText)
+                    .font(.system(size: 14, weight: .bold, design: .default))
+                    .foregroundStyle(Theme.mutedText)
+                if let duration = flight.fetchedDurationLabel {
+                    Text("·")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.mutedText.opacity(0.6))
+                    Text(duration.uppercased())
+                        .font(.system(size: 11, weight: .bold, design: .default))
+                        .foregroundStyle(Theme.mutedText)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
-    private var metaRow: some View {
+    private var actionButtons: some View {
         HStack(spacing: 6) {
-            Text(dateText)
-            Spacer()
+            iconButton(systemName: "pencil", tint: .white.opacity(0.82), fill: .white.opacity(0.10), action: onEdit)
+            iconButton(systemName: "arrow.clockwise", tint: Theme.amber, fill: Theme.amber.opacity(0.14), action: onRefresh)
         }
-        .font(.system(size: 12, weight: .bold, design: .default))
-        .foregroundStyle(Theme.mutedText)
-        .lineLimit(1)
     }
 
-    @ViewBuilder
-    private var airlineRow: some View {
-        if let airlineName = flight.airlineName {
-            HStack(spacing: 8) {
-                AirlineLogo(airlineName: airlineName, size: 22)
-                Text(airlineName)
-                    .font(.system(size: 12, weight: .bold, design: .default))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .lineLimit(1)
+    private func iconButton(systemName: String, tint: Color, fill: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(fill))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Itinerary
+
+    private var hasItineraryBand: Bool {
+        flight.airlineName != nil
+            || flight.departureTime != nil
+            || flight.arrivalTime != nil
+            || flight.stopsSummary != nil
+    }
+
+    private var itineraryBand: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle()
+                .fill(Theme.cardStroke.opacity(0.55))
+                .frame(height: 0.5)
+
+            if let airlineName = flight.airlineName {
+                HStack(spacing: 8) {
+                    AirlineLogo(airlineName: airlineName, size: 24, loadsRemoteImage: false)
+                    Text(airlineName)
+                        .font(.system(size: 13, weight: .bold, design: .default))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+            }
+
+            HStack(spacing: 12) {
+                if flight.departureTime != nil || flight.arrivalTime != nil {
+                    Label {
+                        Text("\(flight.departureTime ?? "—") – \(flight.arrivalTime ?? "—")")
+                    } icon: {
+                        Image(systemName: "clock")
+                    }
+                }
+
+                if let stops = flight.stopsSummary {
+                    Text(stops)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+
                 Spacer(minLength: 0)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var itineraryDetails: some View {
-        let hasTimes = flight.departureTime != nil || flight.arrivalTime != nil
-        let hasStops = flight.stopsSummary != nil
-        let hasDuration = flight.fetchedDurationLabel != nil
-
-        if hasTimes || hasStops || hasDuration {
-            VStack(alignment: .leading, spacing: 4) {
-                if hasTimes {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 10, weight: .bold))
-                        Text("\(flight.departureTime ?? "—") → \(flight.arrivalTime ?? "—")")
-                    }
-                }
-
-                HStack(spacing: 6) {
-                    if let duration = flight.fetchedDurationLabel {
-                        Label(duration.uppercased(), systemImage: "timer")
-                    }
-                    if let stops = flight.stopsSummary {
-                        Text(stops)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                }
-            }
             .font(.system(size: 11, weight: .bold, design: .default))
-            .foregroundStyle(.white.opacity(0.68))
+            .foregroundStyle(Theme.mutedText)
         }
     }
 
+    // MARK: - Price (bottom right)
+
+    @ViewBuilder
     private var priceRow: some View {
-        HStack(alignment: .center, spacing: 10) {
-            priceView
-            deltaPill
-            Spacer()
-            Button(action: onEdit) {
-                Image(systemName: "pencil")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .fill(.white.opacity(0.10))
-                    )
-            }
-            .buttonStyle(.plain)
-            Button(action: onRefresh) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Theme.amber)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle()
-                            .fill(Theme.amber.opacity(0.14))
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-    }
+        HStack {
+            Spacer(minLength: 0)
 
-    @ViewBuilder
-    private var priceView: some View {
-        if let price = flight.lastPrice {
-            VStack(alignment: .leading, spacing: 1) {
-                if let previous = flight.previousPrice, previous != price {
-                    Text(PriceFormatting.string(amount: previous, currency: flight.currencyCode))
-                        .font(.system(size: 12, weight: .bold, design: .default).monospacedDigit())
-                        .foregroundStyle(Theme.mutedText)
-                        .strikethrough(true, color: Theme.mutedText)
+            if let price = flight.lastPrice {
+                VStack(alignment: .trailing, spacing: 3) {
+                    if let previous = flight.previousPrice, previous != price {
+                        Text(PriceFormatting.string(amount: previous, currency: flight.currencyCode))
+                            .font(.system(size: 12, weight: .semibold, design: .default).monospacedDigit())
+                            .foregroundStyle(Theme.mutedText)
+                            .strikethrough(true, color: Theme.mutedText)
+                    }
+
+                    HStack(alignment: .center, spacing: 6) {
+                        if let delta = flight.priceDelta, delta != 0 {
+                            let isDrop = delta < 0
+                            Image(systemName: isDrop ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill")
+                                .font(.system(size: 13, weight: .heavy))
+                                .foregroundStyle(isDrop ? Theme.dropGreen : Color(red: 0.95, green: 0.30, blue: 0.28))
+                        }
+                        Text(PriceFormatting.string(amount: price, currency: flight.currencyCode))
+                            .font(.price(size: 28))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
                 }
-                Text(PriceFormatting.string(amount: price, currency: flight.currencyCode))
-                    .font(.price(size: 26))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+            } else if flight.lastError != nil {
+                Text("Price unavailable")
+                    .font(.system(size: 13, weight: .bold, design: .default))
+                    .foregroundStyle(.white.opacity(0.45))
+            } else {
+                Text("No price yet")
+                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .foregroundStyle(Theme.mutedText)
             }
-        } else if flight.lastError != nil {
-            Text("—")
-                .font(.price(size: 26))
-                .foregroundStyle(.white.opacity(0.4))
-        } else {
-            Text("—")
-                .font(.price(size: 26))
-                .foregroundStyle(.white.opacity(0.4))
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    @ViewBuilder
-    private var deltaPill: some View {
-        if let delta = flight.priceDelta, delta != 0 {
-            let isDrop = delta < 0
-            let tint = isDrop ? Theme.dropGreen : Theme.amber
-            let absAmount = delta < 0 ? -delta : delta
-            HStack(spacing: 4) {
-                Image(systemName: isDrop ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill")
-                    .font(.system(size: 10, weight: .bold))
-                Text(PriceFormatting.string(amount: absAmount, currency: flight.currencyCode))
-                    .font(.system(size: 12, weight: .bold, design: .default).monospacedDigit())
-            }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(tint.opacity(0.16))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(tint.opacity(0.35), lineWidth: 0.6)
-                    )
-            )
-        }
-    }
+    // MARK: - Booking & errors
 
     @ViewBuilder
     private var bookingLink: some View {
         Button(action: onOpenSkyscanner) {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Image(systemName: "ticket")
-                    .font(.system(size: 11, weight: .bold))
-                Text(isOpeningSkyscanner ? "Opening Skyscanner..." : "Open on Skyscanner")
-                    .font(.system(size: 12, weight: .bold, design: .default))
+                    .font(.system(size: 12, weight: .bold))
+                Text(isOpeningSkyscanner ? "Opening Skyscanner…" : "Open on Skyscanner")
+                    .font(.system(size: 13, weight: .bold, design: .default))
                 Spacer(minLength: 0)
                 if isOpeningSkyscanner {
                     ProgressView()
@@ -206,17 +203,18 @@ struct FlightRowView: View {
                         .tint(Theme.amber)
                 } else {
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 11, weight: .bold))
                 }
             }
             .foregroundStyle(Theme.amber)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
             .background(
-                Capsule(style: .continuous)
-                    .fill(Theme.amber.opacity(0.13))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.amber.opacity(0.12))
                     .overlay(
-                        Capsule(style: .continuous)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(Theme.amber.opacity(0.28), lineWidth: 0.6)
                     )
             )
@@ -228,24 +226,16 @@ struct FlightRowView: View {
     @ViewBuilder
     private var footerRow: some View {
         if let error = flight.lastError {
-            Text(error)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
-                .lineLimit(2)
-        } else if let updated = flight.lastUpdated {
-            Text("Updated \(updated.formatted(date: .omitted, time: .shortened))".uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.mutedText)
-                .tracking(0.5)
-        } else if flight.lastPrice == nil {
-            Text("Tap refresh to fetch price".uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.mutedText)
-                .tracking(0.5)
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(error)
+                    .lineLimit(2)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color(red: 1, green: 0.45, blue: 0.4))
         }
     }
-
-    // MARK: - Helpers
 
     private var dateText: String {
         flight.departureDate

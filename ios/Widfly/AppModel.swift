@@ -29,15 +29,23 @@ final class AppModel {
         return Self.formatLastUpdated(date)
     }
 
-    init() {
-        // Defer disk I/O until after the first frame so launch never blocks UI setup.
-        Task { @MainActor in
-            reload()
-        }
-    }
+    init() {}
 
     func reload() {
-        flights = FlightStore.load()
+        let loaded = FlightStore.load()
+        var didSanitizeBookingURL = false
+        flights = loaded.map { flight in
+            var sanitized = flight
+            if let raw = sanitized.bookingURL,
+               !SkyscannerBookingURL.matches(flight: sanitized, urlString: raw) {
+                sanitized.bookingURL = nil
+                didSanitizeBookingURL = true
+            }
+            return sanitized
+        }
+        if didSanitizeBookingURL {
+            persist()
+        }
     }
 
     @discardableResult

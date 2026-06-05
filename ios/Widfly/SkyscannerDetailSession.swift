@@ -7,44 +7,51 @@ import WidflyKit
 @Observable
 final class SkyscannerDetailSession: Identifiable {
     let id = UUID()
-    let webView: WKWebView
     let flight: TrackedFlight
 
     var statusMessage = "Opening Skyscanner..."
     var resolvedURL: URL?
     var isResolving = false
+    var didFail = false
 
-    private var didTrySelecting = false
+    private var webViewStorage: WKWebView?
+    private var selectionAttempts = 0
     private var pollTask: Task<Void, Never>?
 
-    init(flight: TrackedFlight) {
-        self.flight = flight
-
+  var webView: WKWebView {
+        if let webViewStorage { return webViewStorage }
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let preferences = WKWebpagePreferences()
         preferences.allowsContentJavaScript = true
         configuration.defaultWebpagePreferences = preferences
 
-        self.webView = WKWebView(frame: .init(x: 0, y: 0, width: 390, height: 800), configuration: configuration)
-        self.webView.customUserAgent =
+        let view = WKWebView(frame: .init(x: 0, y: 0, width: 390, height: 800), configuration: configuration)
+        view.customUserAgent =
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        webViewStorage = view
+        return view
+    }
+
+    init(flight: TrackedFlight) {
+        self.flight = flight
     }
 
     func start() {
         guard !isResolving, resolvedURL == nil else { return }
         isResolving = true
+        didFail = false
+        selectionAttempts = 0
 
-        if let rawURL = flight.bookingURL,
-           let url = URL(string: rawURL),
-           rawURL.contains("/config/") {
+        if let url = SkyscannerBookingURL.validated(for: flight) {
             statusMessage = "Opening selected flight..."
             resolve(url)
-        } else {
-            statusMessage = "Finding selected flight..."
-            webView.load(URLRequest(url: searchURL))
-            startAutoSelection()
+            return
         }
+
+        statusMessage = "Finding selected flight..."
+        webView.load(URLRequest(url: SkyscannerBookingURL.searchURL(for: flight)))
+        startAutoSelection()
     }
 
     func stop() {
@@ -54,53 +61,23 @@ final class SkyscannerDetailSession: Identifiable {
         webView.stopLoading()
     }
 
-    private var searchURL: URL {
-        var components = URLComponents()
-        components.scheme = "https"
-        components.host = "www.skyscanner.com.tr"
-        components.path = "/tasima/ucak-bileti/\(flight.origin.lowercased())/\(flight.destination.lowercased())/\(datePathComponent(flight.departureDate))/"
-        components.queryItems = [
-            URLQueryItem(name: "adultsv2", value: "1"),
-            URLQueryItem(name: "cabinclass", value: "economy"),
-            URLQueryItem(name: "childrenv2", value: ""),
-            URLQueryItem(name: "ref", value: "home"),
-            URLQueryItem(name: "rtn", value: "0"),
-            URLQueryItem(name: "outboundaltsenabled", value: "false"),
-            URLQueryItem(name: "inboundaltsenabled", value: "false"),
-            URLQueryItem(name: "preferdirects", value: "false")
-        ]
-        guard let url = components.url else {
-            return URL(string: "https://www.skyscanner.com.tr/")!
-        }
-        return url
-    }
-
-    private func datePathComponent(_ date: Date) -> String {
-        let calendar = Calendar(identifier: .gregorian)
-        let y = calendar.component(.year, from: date) % 100
-        let m = calendar.component(.month, from: date)
-        let d = calendar.component(.day, from: date)
-        return String(format: "%02d%02d%02d", y, m, d)
-    }
-
     private func startAutoSelection() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             guard let self else { return }
 
-            for _ in 0..<24 {
+            for _ in 0..<48 {
                 if Task.isCancelled { return }
 
                 if self.resolveCurrentDetailURL() { return }
-                if !self.didTrySelecting {
-                    _ = await self.trySelectMatchingFlight()
-                }
+                _ = await self.trySelectMatchingFlight()
 
                 try? await Task.sleep(for: .milliseconds(500))
             }
 
             self.statusMessage = "Try again"
             self.isResolving = false
+            self.didFail = true
             self.webView.stopLoading()
         }
     }
@@ -118,13 +95,15 @@ final class SkyscannerDetailSession: Identifiable {
         pollTask?.cancel()
         pollTask = nil
         isResolving = false
+        didFail = false
         webView.stopLoading()
         resolvedURL = url
     }
 
     private func detailURL(from url: URL) -> URL? {
         let raw = url.absoluteString
-        if raw.contains("/config/") {
+        if raw.contains("/config/"),
+           SkyscannerBookingURL.matches(flight: flight, urlString: raw) {
             return url
         }
 
@@ -133,42 +112,55 @@ final class SkyscannerDetailSession: Identifiable {
         }
 
         let suffix = raw[detailsRange.upperBound...]
-        guard let id = suffix.split(separator: "/").first, !id.isEmpty else {
+        guard let configID = suffix.split(separator: "/").first, !configID.isEmpty else {
             return nil
         }
 
         var components = URLComponents()
         components.scheme = "https"
         components.host = "www.skyscanner.com.tr"
-        components.path = "/tasima/ucak-bileti/\(flight.origin.lowercased())/\(flight.destination.lowercased())/\(datePathComponent(flight.departureDate))/config/\(id)"
+        components.path = "/transport/flights/\(flight.origin.lowercased())/\(flight.destination.lowercased())/\(datePathComponent(flight.departureDate))/config/\(configID)"
         components.queryItems = [
+            URLQueryItem(name: "adults", value: "1"),
             URLQueryItem(name: "adultsv2", value: "1"),
             URLQueryItem(name: "cabinclass", value: "economy"),
-            URLQueryItem(name: "childrenv2", value: ""),
-            URLQueryItem(name: "ref", value: "home"),
+            URLQueryItem(name: "children", value: "0"),
+            URLQueryItem(name: "infants", value: "0"),
+            URLQueryItem(name: "preferdirects", value: "false"),
             URLQueryItem(name: "rtn", value: "0"),
-            URLQueryItem(name: "outboundaltsenabled", value: "false"),
-            URLQueryItem(name: "inboundaltsenabled", value: "false"),
-            URLQueryItem(name: "preferdirects", value: "false")
+            URLQueryItem(name: "currency", value: flight.currencyCode),
+            URLQueryItem(name: "locale", value: "tr-TR"),
         ]
 
         return components.url
     }
 
+    private func datePathComponent(_ date: Date) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let y = calendar.component(.year, from: date) % 100
+        let m = calendar.component(.month, from: date)
+        let d = calendar.component(.day, from: date)
+        return String(format: "%02d%02d%02d", y, m, d)
+    }
+
     private func trySelectMatchingFlight() async -> Bool {
-        guard !didTrySelecting else { return false }
+        guard selectionAttempts < 12 else { return false }
+        selectionAttempts += 1
 
         let script = Self.selectFlightJavaScript(
             departureTime: flight.departureTime,
             arrivalTime: flight.arrivalTime,
-            durationMinutes: flight.durationMinutes
+            durationMinutes: flight.durationMinutes,
+            airlineName: flight.airlineName,
+            price: flight.lastPrice
         )
 
         do {
             let value = try await webView.evaluateJavaScript(script)
             if let urlString = value as? String,
                let url = URL(string: urlString),
-               urlString.contains("/config/") {
+               urlString.contains("/config/"),
+               SkyscannerBookingURL.matches(flight: flight, urlString: urlString) {
                 resolve(url)
                 return true
             }
@@ -177,7 +169,6 @@ final class SkyscannerDetailSession: Identifiable {
                let data = json.data(using: .utf8),
                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                object["status"] as? String == "clicked" {
-                didTrySelecting = true
                 statusMessage = "Opening selected flight..."
                 return true
             }
@@ -191,18 +182,23 @@ final class SkyscannerDetailSession: Identifiable {
     private static func selectFlightJavaScript(
         departureTime: String?,
         arrivalTime: String?,
-        durationMinutes: Int?
+        durationMinutes: Int?,
+        airlineName: String?,
+        price: Decimal?
     ) -> String {
         let departure = departureTime ?? ""
         let arrival = arrivalTime ?? ""
         let duration = durationMinutes.map(String.init) ?? ""
+        let airline = airlineName ?? ""
+        let priceText = price.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
 
         return """
         (function() {
-          if (window.__widflyOpenSelected) return JSON.stringify({ status: 'alreadyClicked' });
           var departure = '\(departure)';
           var arrival = '\(arrival)';
           var duration = '\(duration)';
+          var airline = '\(airline)';
+          var priceText = '\(priceText)';
 
           function absoluteURL(href) {
             if (!href) return null;
@@ -219,6 +215,19 @@ final class SkyscannerDetailSession: Identifiable {
               if (Math.abs(total - wanted) <= 10) return true;
             }
             return false;
+          }
+
+          function priceMatches(text) {
+            if (!priceText) return true;
+            var digits = (text || '').replace(/[^\\d]/g, '');
+            var wanted = priceText.replace(/[^\\d]/g, '');
+            if (!wanted || wanted.length < 3) return true;
+            return digits.indexOf(wanted) >= 0;
+          }
+
+          function airlineMatches(text) {
+            if (!airline) return true;
+            return (text || '').indexOf(airline) >= 0;
           }
 
           function configURLIn(node) {
@@ -245,7 +254,6 @@ final class SkyscannerDetailSession: Identifiable {
                 var text = (candidate.innerText || candidate.textContent || '').replace(/\\s+/g, ' ').trim();
                 var href = candidate.getAttribute ? (candidate.getAttribute('href') || '') : '';
                 if (href.indexOf('/config/') >= 0 || /teklifleri?\\s*gör|view\\s*deal|select|details|continue/i.test(text)) {
-                  window.__widflyOpenSelected = true;
                   candidate.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                   if (typeof candidate.click === 'function') candidate.click();
                   return true;
@@ -264,6 +272,8 @@ final class SkyscannerDetailSession: Identifiable {
             if (departure && text.indexOf(departure) < 0) continue;
             if (arrival && text.indexOf(arrival) < 0) continue;
             if (!durationMatches(text)) continue;
+            if (!airlineMatches(text)) continue;
+            if (!priceMatches(text)) continue;
 
             var configURL = configURLIn(el);
             if (configURL) return configURL;

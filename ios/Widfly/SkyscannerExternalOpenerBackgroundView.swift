@@ -3,6 +3,7 @@ import SwiftUI
 struct SkyscannerExternalOpenerBackgroundView: View {
     @Bindable var session: SkyscannerDetailSession
     let onResolved: (URL) -> Void
+    let onFailure: () -> Void
     let onFinish: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -10,8 +11,8 @@ struct SkyscannerExternalOpenerBackgroundView: View {
 
     var body: some View {
         WebViewRepresentable(webView: session.webView)
-            .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
-            .opacity(0.01)
+            .frame(width: 1, height: 1)
+            .opacity(0)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onAppear {
@@ -23,6 +24,11 @@ struct SkyscannerExternalOpenerBackgroundView: View {
                 guard let url else { return }
                 onResolved(url)
                 openURL(url)
+                finish()
+            }
+            .onChange(of: session.didFail) { _, failed in
+                guard failed else { return }
+                onFailure()
                 finish()
             }
             .onDisappear {

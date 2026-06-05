@@ -10,7 +10,8 @@ struct ContentView: View {
     @State private var editMode: EditMode = .inactive
     @State private var editingFlight: TrackedFlight?
     @State private var detailedFlight: TrackedFlight?
-    @State private var isListReady = false
+    @State private var didLoadFlights = false
+    @State private var refreshSheetSession: RefreshSession?
 
     var body: some View {
         @Bindable var model = model
@@ -43,6 +44,10 @@ struct ContentView: View {
                             model.updateBookingURL(for: flight, url: url)
                         }
                     },
+                    onFailure: {
+                        openURL(SkyscannerBookingURL.searchURL(for: detailSession.flight))
+                        model.statusMessage = "Opened search results in Safari."
+                    },
                     onFinish: {
                         resolvingFlightID = nil
                         self.detailSession = nil
@@ -61,12 +66,21 @@ struct ContentView: View {
         .sheet(item: $detailedFlight) { flight in
             FlightDetailView(flight: flight)
         }
-        .sheet(item: $model.activeSession, onDismiss: {
+        .sheet(item: $refreshSheetSession, onDismiss: {
             model.sessionDidDismiss()
+            refreshSheetSession = nil
         }) { session in
             RefreshSheetView(session: session)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            guard !didLoadFlights else { return }
+            didLoadFlights = true
+            model.reload()
+        }
+        .onChange(of: model.activeSession?.id) { _, _ in
+            refreshSheetSession = model.activeSession
+        }
     }
 
     // MARK: - Header
@@ -149,9 +163,7 @@ struct ContentView: View {
                     },
                     isOpeningSkyscanner: resolvingFlightID == flight.id,
                     onOpenSkyscanner: {
-                        if let rawURL = flight.bookingURL,
-                           let url = URL(string: rawURL),
-                           rawURL.contains("/config/") {
+                        if let url = SkyscannerBookingURL.validated(for: flight) {
                             openURL(url)
                         } else {
                             resolvingFlightID = flight.id
@@ -173,9 +185,8 @@ struct ContentView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, $editMode)
-        .onAppear { isListReady = true }
         .refreshable {
-            guard isListReady, !model.isRefreshing else { return }
+            guard didLoadFlights, !model.isRefreshing else { return }
             model.refreshAll()
         }
     }
