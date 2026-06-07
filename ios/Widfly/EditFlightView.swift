@@ -66,8 +66,12 @@ struct EditFlightView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Search Filters")
+                } footer: {
+                    Text("Widfly picks the cheapest Skyscanner result that matches these filters.")
                 }
-                
+
                 Section("Time Filters") {
                     Picker("Departure Time", selection: $departureTimeFilter) {
                         Text("Any Time").tag(TimeFilter?.none)

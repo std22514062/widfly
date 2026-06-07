@@ -21,9 +21,9 @@ enum Theme {
     static let cardStroke = Color.white.opacity(0.20)
 
     /// Muted white for secondary text (date, duration, "updated" labels).
-    static let mutedText = Color.white.opacity(0.55)
+    static let mutedText = Color.white.opacity(0.65)
 
-    static let cardCornerRadius: CGFloat = 18
+    static let cardCornerRadius: CGFloat = 14
 }
 
 extension Font {

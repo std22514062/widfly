@@ -7,7 +7,6 @@ struct ContentView: View {
     @State private var showingAdd = false
     @State private var detailSession: SkyscannerDetailSession?
     @State private var resolvingFlightID: UUID?
-    @State private var editMode: EditMode = .inactive
     @State private var editingFlight: TrackedFlight?
     @State private var detailedFlight: TrackedFlight?
     @State private var didLoadFlights = false
@@ -24,15 +23,10 @@ struct ContentView: View {
                 content
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
-        .overlay(alignment: .bottom) {
-            if !model.flights.isEmpty {
-                Text(model.footerText)
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Theme.background.opacity(0.96))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !model.flights.isEmpty {
+                    footerBar
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -64,7 +58,21 @@ struct ContentView: View {
             }
         }
         .sheet(item: $detailedFlight) { flight in
-            FlightDetailView(flight: flight)
+            FlightDetailView(
+                flight: flight,
+                isOpeningSkyscanner: resolvingFlightID == flight.id,
+                onRefresh: {
+                    detailedFlight = nil
+                    model.refresh(flight: flight)
+                },
+                onEdit: {
+                    detailedFlight = nil
+                    editingFlight = flight
+                },
+                onOpenSkyscanner: {
+                    openSkyscanner(for: flight)
+                }
+            )
         }
         .sheet(item: $refreshSheetSession, onDismiss: {
             model.sessionDidDismiss()
@@ -83,6 +91,24 @@ struct ContentView: View {
         }
     }
 
+    private func openSkyscanner(for flight: TrackedFlight) {
+        if let url = SkyscannerBookingURL.validated(for: flight) {
+            openURL(url)
+        } else {
+            resolvingFlightID = flight.id
+            detailSession = SkyscannerDetailSession(flight: flight)
+        }
+    }
+
+    private var footerBar: some View {
+        Text(model.footerText)
+            .font(.footnote)
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Theme.background.opacity(0.96))
+    }
+
     // MARK: - Header
 
     private var header: some View {
@@ -97,9 +123,7 @@ struct ContentView: View {
                 }
 
                 if !model.flights.isEmpty {
-                    CircularGlassButton(systemName: editMode == .active ? "checkmark" : "arrow.up.arrow.down") {
-                        editMode = editMode == .active ? .inactive : .active
-                    }
+                    sortMenuButton
                 }
 
                 Spacer()
@@ -117,6 +141,32 @@ struct ContentView: View {
         .padding(.top, 12)
         .safeAreaPadding(.top, 8)
         .padding(.bottom, 18)
+    }
+
+    private var sortMenuButton: some View {
+        Menu {
+            Picker("Sort by", selection: Binding(
+                get: { model.sortOrder },
+                set: { model.setSortOrder($0) }
+            )) {
+                ForEach(FlightListSort.allCases) { option in
+                    Label(option.label, systemImage: option.systemImage)
+                        .tag(option)
+                }
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Theme.cardFill)
+                Circle()
+                    .strokeBorder(Theme.cardStroke, lineWidth: 0.8)
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Theme.amber)
+            }
+            .frame(width: 42, height: 42)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Content
@@ -152,39 +202,36 @@ struct ContentView: View {
 
     private var flightList: some View {
         List {
-            ForEach(model.flights) { flight in
-                FlightRowView(
-                    flight: flight,
-                    onRefresh: {
-                        model.refresh(flight: flight)
-                    },
-                    onEdit: {
-                        editingFlight = flight
-                    },
-                    isOpeningSkyscanner: resolvingFlightID == flight.id,
-                    onOpenSkyscanner: {
-                        if let url = SkyscannerBookingURL.validated(for: flight) {
-                            openURL(url)
-                        } else {
-                            resolvingFlightID = flight.id
-                            detailSession = SkyscannerDetailSession(flight: flight)
-                        }
+            ForEach(model.displayedFlights) { flight in
+                FlightRowView(flight: flight)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        detailedFlight = flight
                     }
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    detailedFlight = flight
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button {
+                            model.refresh(flight: flight)
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                        }
+                        .tint(Theme.amber)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            editingFlight = flight
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.gray)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
-            .onDelete(perform: model.deleteFlights)
-            .onMove(perform: model.moveFlights)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .environment(\.editMode, $editMode)
+        .contentMargins(.bottom, 8, for: .scrollContent)
         .refreshable {
             guard didLoadFlights, !model.isRefreshing else { return }
             model.refreshAll()
@@ -229,41 +276,42 @@ private struct CircularGlassButton: View {
 
 struct FlightDetailView: View {
     let flight: TrackedFlight
+    let isOpeningSkyscanner: Bool
+    let onRefresh: () -> Void
+    let onEdit: () -> Void
+    let onOpenSkyscanner: () -> Void
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
+                    Button(action: onRefresh) {
+                        Label("Refresh Price", systemImage: "arrow.clockwise")
+                    }
+                    Button(action: onEdit) {
+                        Label("Edit Route", systemImage: "pencil")
+                    }
+                    Button(action: onOpenSkyscanner) {
+                        HStack {
+                            Label("Open on Skyscanner", systemImage: "arrow.up.right.square")
+                            Spacer(minLength: 0)
+                            if isOpeningSkyscanner {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isOpeningSkyscanner)
+                }
+
+                Section {
                     LabeledContent("Origin", value: airportName(flight.origin))
                     LabeledContent("Destination", value: airportName(flight.destination))
                     LabeledContent("Date", value: flight.departureDate.formatted(date: .abbreviated, time: .omitted))
                 } header: {
                     Text("Route")
-                }
-
-                if flight.departureTimeFilter != nil
-                    || flight.arrivalTimeFilter != nil
-                    || flight.maxDurationMinutes != nil {
-                    Section {
-                        if let filter = flight.departureTimeFilter {
-                            LabeledContent("Departure Window", value: filter.rawValue)
-                        } else {
-                            LabeledContent("Departure Window", value: "Any Time")
-                        }
-                        if let filter = flight.arrivalTimeFilter {
-                            LabeledContent("Arrival Window", value: filter.rawValue)
-                        } else {
-                            LabeledContent("Arrival Window", value: "Any Time")
-                        }
-                        if let maxDuration = flight.maxDurationLabel {
-                            LabeledContent("Max Duration", value: maxDuration)
-                        }
-                    } header: {
-                        Text("Search Filters")
-                    } footer: {
-                        Text("Widfly picks the cheapest Skyscanner result that matches these filters.")
-                    }
                 }
 
                 if let price = flight.lastPrice {

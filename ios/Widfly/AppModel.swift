@@ -9,8 +9,15 @@ final class AppModel {
     var flights: [TrackedFlight] = []
     var activeSession: RefreshSession?
     var statusMessage: String?
+    var sortOrder: FlightListSort = {
+        FlightListSort.loadSaved()
+    }()
 
     var isRefreshing: Bool { activeSession != nil }
+
+    var displayedFlights: [TrackedFlight] {
+        sortOrder.sorted(flights)
+    }
 
     /// Most recent price fetch across all saved routes.
     var lastDataRefreshDate: Date? {
@@ -30,6 +37,13 @@ final class AppModel {
     }
 
     init() {}
+
+    func setSortOrder(_ order: FlightListSort) {
+        sortOrder = order
+        UserDefaults.standard.set(order.rawValue, forKey: Self.sortOrderKey)
+    }
+
+    private static let sortOrderKey = "widfly.flightListSort"
 
     func reload() {
         let loaded = FlightStore.load()
