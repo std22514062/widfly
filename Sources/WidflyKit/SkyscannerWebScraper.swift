@@ -247,6 +247,15 @@ public final class SkyscannerWebScraper: NSObject {
         return v;
       }
 
+      function filterReasonablePrices(prices) {
+        if (!prices.length) return prices;
+        if (currency === 'TRY') {
+          var realistic = prices.filter(function(p) { return p >= 1000; });
+          if (realistic.length) return realistic;
+        }
+        return prices;
+      }
+
       var priceRx = /(?:₺|TL\\b|TRY\\b|\\$|€|£)\\s*[\\d][\\d.,]*|[\\d][\\d.,]*\\s*(?:₺|TL\\b|TRY\\b|\\$|€|£)/gi;
       function pricesIn(text) {
         var out = [];
@@ -255,7 +264,7 @@ public final class SkyscannerWebScraper: NSObject {
           var v = parseAmount(matches[i]);
           if (v !== null) out.push(v);
         }
-        return out;
+        return filterReasonablePrices(out);
       }
 
       // Matches "4 sa. 36 dk.", "4 sa 36 dk", "4 saat 36 dakika", "7h 30m".

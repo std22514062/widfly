@@ -17,9 +17,13 @@ struct FlightRowView: View {
 
             HStack(alignment: .center, spacing: 8) {
                 metaLabel
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(0)
+
+                Spacer(minLength: 8)
 
                 priceLabel
+                    .layoutPriority(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(.horizontal, 14)

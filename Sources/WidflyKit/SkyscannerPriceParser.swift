@@ -93,14 +93,40 @@ public enum SkyscannerPriceParser {
         var digits = trimmed
         let allowed = CharacterSet(charactersIn: "0123456789,.")
         digits = String(digits.unicodeScalars.filter { allowed.contains($0) })
+        guard !digits.isEmpty else { return nil }
 
-        if digits.contains(",") && digits.contains(".") {
-            digits = digits.replacingOccurrences(of: ".", with: "")
-            digits = digits.replacingOccurrences(of: ",", with: ".")
-        } else if digits.contains(",") {
-            digits = digits.replacingOccurrences(of: ",", with: ".")
+        let hasComma = digits.contains(",")
+        let hasDot = digits.contains(".")
+
+        if hasComma && hasDot {
+            if let lastComma = digits.lastIndex(of: ","),
+               let lastDot = digits.lastIndex(of: ".") {
+                if lastComma > lastDot {
+                    digits = digits.replacingOccurrences(of: ".", with: "")
+                    digits = digits.replacingOccurrences(of: ",", with: ".")
+                } else {
+                    digits = digits.replacingOccurrences(of: ",", with: "")
+                }
+            }
+        } else if hasComma {
+            let afterComma = digits.split(separator: ",").last.map(String.init) ?? ""
+            let commaCount = digits.filter { $0 == "," }.count
+            if commaCount > 1 || afterComma.count == 3 {
+                digits = digits.replacingOccurrences(of: ",", with: "")
+            } else {
+                digits = digits.replacingOccurrences(of: ",", with: ".")
+            }
+        } else if hasDot {
+            let afterDot = digits.split(separator: ".").last.map(String.init) ?? ""
+            let dotCount = digits.filter { $0 == "." }.count
+            if dotCount > 1 || afterDot.count == 3 {
+                digits = digits.replacingOccurrences(of: ".", with: "")
+            }
         }
 
-        return Decimal(string: digits)
+        guard let decimal = Decimal(string: digits) else { return nil }
+        let value = NSDecimalNumber(decimal: decimal).doubleValue
+        guard value > 20, value < 1_000_000 else { return nil }
+        return decimal
     }
 }

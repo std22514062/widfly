@@ -208,7 +208,7 @@ struct ContentView: View {
                     .onTapGesture {
                         detailedFlight = flight
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button {
                             model.refresh(flight: flight)
                         } label: {
@@ -216,13 +216,12 @@ struct ContentView: View {
                         }
                         .tint(Theme.amber)
                     }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            editingFlight = flight
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            model.deleteFlight(flight)
                         } label: {
-                            Label("Edit", systemImage: "pencil")
+                            Label("Delete", systemImage: "trash")
                         }
-                        .tint(.gray)
                     }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)

@@ -28,6 +28,7 @@ enum AirportLookup {
         Airport(code: "ADB", name: "Izmir Adnan Menderes Airport", city: "Izmir", country: "Turkey"),
         Airport(code: "AYT", name: "Antalya Airport", city: "Antalya", country: "Turkey"),
         Airport(code: "ESB", name: "Ankara Esenboga Airport", city: "Ankara", country: "Turkey"),
+        Airport(code: "ECN", name: "Ercan International Airport", city: "Lefkosa", country: "Cyprus"),
         Airport(code: "RTM", name: "Rotterdam The Hague Airport", city: "Rotterdam", country: "Netherlands"),
         Airport(code: "AMS", name: "Amsterdam Schiphol Airport", city: "Amsterdam", country: "Netherlands"),
         Airport(code: "EIN", name: "Eindhoven Airport", city: "Eindhoven", country: "Netherlands"),
