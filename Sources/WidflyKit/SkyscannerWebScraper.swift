@@ -3,6 +3,42 @@ import Foundation
 #if canImport(WebKit)
 import WebKit
 
+// #region agent log
+enum ScrapeDebugLog {
+    private static let path = "/Users/cagataykalayci/Desktop/widfly/.cursor/debug-7aa347.log"
+
+    static func write(
+        hypothesisId: String,
+        location: String,
+        message: String,
+        data: [String: Any] = [:],
+        runId: String = "pre-fix"
+    ) {
+        var payload: [String: Any] = [
+            "sessionId": "7aa347",
+            "runId": runId,
+            "hypothesisId": hypothesisId,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let json = try? JSONSerialization.data(withJSONObject: payload),
+              let line = String(data: json, encoding: .utf8) else { return }
+        let url = URL(fileURLWithPath: path)
+        if FileManager.default.fileExists(atPath: path),
+           let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data((line + "\n").utf8))
+            try? handle.close()
+        } else {
+            try? (line + "\n").write(to: url, atomically: false, encoding: .utf8)
+        }
+    }
+}
+// #endregion
+
 public enum SkyscannerScraperError: LocalizedError {
     case webViewUnavailable
     case navigationFailed(String)
@@ -41,6 +77,9 @@ public final class SkyscannerWebScraper: NSObject {
     private var sawCaptcha = false
     private var redirectRetries = 0
     private let maxRedirectRetries = 2
+    private var pollCount = 0
+    private var scrapeOrigin = ""
+    private var scrapeDestination = ""
 
     private var effectiveTimeout: TimeInterval {
         options.interactive ? interactiveTimeout : headlessTimeout
@@ -74,6 +113,23 @@ public final class SkyscannerWebScraper: NSObject {
         self.targetURL = url
         self.sawCaptcha = false
         self.redirectRetries = 0
+        self.pollCount = 0
+        self.scrapeOrigin = origin.uppercased()
+        self.scrapeDestination = destination.uppercased()
+
+        // #region agent log
+        ScrapeDebugLog.write(
+            hypothesisId: "H4",
+            location: "SkyscannerWebScraper.fetchLowestPrice",
+            message: "scrape_started",
+            data: [
+                "origin": scrapeOrigin,
+                "destination": scrapeDestination,
+                "maxDurationMinutes": options.maxDurationMinutes as Any,
+                "url": url.absoluteString,
+            ]
+        )
+        // #endregion
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -138,6 +194,9 @@ public final class SkyscannerWebScraper: NSObject {
     private func evaluatePage() async {
         guard let webView else { return }
         let currency = options.currency
+        pollCount += 1
+        let pollIndex = pollCount
+        let elapsed = Date().timeIntervalSince(startedAt)
 
         do {
             let script = Self.extractPriceJavaScript(
@@ -152,6 +211,32 @@ public final class SkyscannerWebScraper: NSObject {
             let object = json.flatMap {
                 try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any]
             }
+
+            // #region agent log
+            if let object {
+                ScrapeDebugLog.write(
+                    hypothesisId: "H1-H5",
+                    location: "SkyscannerWebScraper.evaluatePage",
+                    message: "poll_result",
+                    data: [
+                        "poll": pollIndex,
+                        "elapsedSec": elapsed,
+                        "route": "\(scrapeOrigin)-\(scrapeDestination)",
+                        "found": object["found"] as Any,
+                        "amount": object["amount"] as Any,
+                        "debugSource": object["debugSource"] as Any,
+                        "debugCardCount": object["debugCardCount"] as Any,
+                        "debugEligibleCount": object["debugEligibleCount"] as Any,
+                        "debugEligibleAmounts": object["debugEligibleAmounts"] as Any,
+                        "debugFallbackAmounts": object["debugFallbackAmounts"] as Any,
+                        "debugLowestBeforePick": object["debugLowestBeforePick"] as Any,
+                        "debugMedianCutoff": object["debugMedianCutoff"] as Any,
+                        "airlineName": object["airlineName"] as Any,
+                        "explicitNoFlights": object["explicitNoFlights"] as Any,
+                    ]
+                )
+            }
+            // #endregion
 
             if let object,
                object["blocked"] as? Bool == true {
@@ -170,10 +255,32 @@ public final class SkyscannerWebScraper: NSObject {
             }
 
             if let json, let result = SkyscannerPriceParser.parse(json: json, fallbackCurrency: currency) {
+                // #region agent log
+                ScrapeDebugLog.write(
+                    hypothesisId: "H4",
+                    location: "SkyscannerWebScraper.evaluatePage",
+                    message: "accepting_price",
+                    data: [
+                        "poll": pollIndex,
+                        "elapsedSec": elapsed,
+                        "route": "\(scrapeOrigin)-\(scrapeDestination)",
+                        "amount": NSDecimalNumber(decimal: result.amount).stringValue,
+                        "debugSource": object?["debugSource"] as Any,
+                        "airlineName": result.airlineName as Any,
+                    ]
+                )
+                // #endregion
                 finish(with: .success(result))
             }
         } catch {
-            // Ignore transient JS errors; polling will retry.
+            // #region agent log
+            ScrapeDebugLog.write(
+                hypothesisId: "H4",
+                location: "SkyscannerWebScraper.evaluatePage",
+                message: "poll_js_error",
+                data: ["poll": pollIndex, "error": error.localizedDescription]
+            )
+            // #endregion
         }
     }
 
@@ -257,14 +364,118 @@ public final class SkyscannerWebScraper: NSObject {
       }
 
       var priceRx = /(?:₺|TL\\b|TRY\\b|\\$|€|£)\\s*[\\d][\\d.,]*|[\\d][\\d.,]*\\s*(?:₺|TL\\b|TRY\\b|\\$|€|£)/gi;
-      function pricesIn(text) {
+      var noiseLineRx = /tasarruf|save\\s+|indirim|discount|coupon|promo|bugün|today\\s+only|per\\s+month|aylık|gecelik|\\/night|otel|hotel|araç|car\\s*hire|baggage|bagaj|ek\\s*ücret|fee|alarm|chart|grafik|takvim/i;
+
+      function allParsedPrices(text) {
         var out = [];
-        var matches = (text || '').match(priceRx) || [];
+        if (!text) return out;
+        priceRx.lastIndex = 0;
+        var matches = text.match(priceRx) || [];
         for (var i = 0; i < matches.length; i++) {
           var v = parseAmount(matches[i]);
           if (v !== null) out.push(v);
         }
-        return filterReasonablePrices(out);
+        return out;
+      }
+
+      function pricesFromLines(text) {
+        var out = [];
+        var lines = (text || '').split(/\\n+/);
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].replace(/\\s+/g, ' ').trim();
+          if (!line || line.length > 120) continue;
+          if (noiseLineRx.test(line)) continue;
+          priceRx.lastIndex = 0;
+          var matches = line.match(priceRx) || [];
+          for (var j = 0; j < matches.length; j++) {
+            var v = parseAmount(matches[j]);
+            if (v !== null) out.push(v);
+          }
+        }
+        return out;
+      }
+
+      function primaryPriceFromPrices(prices) {
+        var prs = filterReasonablePrices(prices.slice()).sort(function(a, b) { return a - b; });
+        if (!prs.length) return null;
+        while (prs.length > 1 && prs[1] / prs[0] > 1.28) {
+          prs.shift();
+        }
+        return prs[0];
+      }
+
+      function primaryPriceFromText(text) {
+        var linePrices = pricesFromLines(text);
+        if (linePrices.length) return primaryPriceFromPrices(linePrices);
+        return primaryPriceFromPrices(allParsedPrices(text));
+      }
+
+      function resultsRoot() {
+        var selectors = [
+          '[data-testid="dayview-root"]',
+          '[class*="DayView"]',
+          '[class*="day-view"]',
+          'main'
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+          var el = document.querySelector(selectors[i]);
+          if (el) return el;
+        }
+        return document.body;
+      }
+
+      function cardPrimaryPrice(el) {
+        if (!el) return null;
+        var node = el;
+        var depth = 0;
+        while (node && node !== document.body && depth <= 4) {
+          var linePrices = pricesFromLines(node.textContent || '');
+          var rawPrices = linePrices.length ? linePrices : allParsedPrices(node.textContent || '');
+          var p = primaryPriceFromPrices(rawPrices);
+          if (p !== null) return p;
+          node = node.parentElement;
+          depth++;
+        }
+        return null;
+      }
+
+      function pickBestEligible(eligible) {
+        if (!eligible.length) return { best: null, debug: {} };
+        eligible.sort(function(a, b) { return a.amount - b.amount; });
+        if (eligible.length === 1) {
+          return {
+            best: eligible[0],
+            debug: {
+              debugEligibleAmounts: [eligible[0].amount],
+              debugLowestBeforePick: eligible[0].amount,
+              debugMedianCutoff: null,
+              debugPickAdjusted: false
+            }
+          };
+        }
+        var amounts = eligible.map(function(e) { return e.amount; }).sort(function(a, b) { return a - b; });
+        var median = amounts[Math.floor(amounts.length / 2)];
+        var cutoff = median * 0.68;
+        var picked = eligible[0];
+        var adjusted = false;
+        if (eligible[0].amount < cutoff) {
+          for (var i = 0; i < eligible.length; i++) {
+            if (eligible[i].amount >= cutoff) {
+              picked = eligible[i];
+              adjusted = true;
+              break;
+            }
+          }
+        }
+        return {
+          best: picked,
+          debug: {
+            debugEligibleAmounts: amounts,
+            debugLowestBeforePick: eligible[0].amount,
+            debugMedianCutoff: cutoff,
+            debugPickAdjusted: adjusted
+          }
+        };
       }
 
       // Matches "4 sa. 36 dk.", "4 sa 36 dk", "4 saat 36 dakika", "7h 30m".
@@ -390,28 +601,16 @@ public final class SkyscannerWebScraper: NSObject {
         return null;
       }
 
-      function pricesForCard(el) {
-        var node = el;
-        var depth = 0;
-        while (node && node !== document.body && depth <= 4) {
-          var prs = pricesIn(node.textContent || '');
-          if (prs.length) return prs;
-          node = node.parentElement;
-          depth++;
-        }
-        return [];
-      }
-
       var eligible = [];
       for (var k = 0; k < cards.length; k++) {
         var card = cards[k];
         var ct2 = card.textContent || '';
         var durs = durationsIn(ct2);
-        var prs = pricesForCard(card);
+        var amount = cardPrimaryPrice(card);
         if (!durs.length) continue;
         var maxDur = Math.max.apply(null, durs);
         if (maxMinutes > 0 && maxDur > maxMinutes) continue;
-        if (!prs.length) continue;
+        if (amount === null) continue;
         var cardTimes = timesIn(ct2);
         var dTime = cardTimes.length > 0 ? cardTimes[0] : null;
         var aTime = cardTimes.length > 1 ? cardTimes[1] : null;
@@ -419,7 +618,7 @@ public final class SkyscannerWebScraper: NSObject {
         if (!timeMatches(aTime, arrFilter)) continue;
         
         eligible.push({
-          amount: Math.min.apply(null, prs),
+          amount: amount,
           currency: currency,
           durationMinutes: maxDur,
           departureTime: cardTimes.length > 0 ? cardTimes[0] : null,
@@ -432,11 +631,59 @@ public final class SkyscannerWebScraper: NSObject {
       }
 
       if (eligible.length) {
-        eligible.sort(function(a, b) { return a.amount - b.amount; });
-        var best = eligible[0];
+        var pick = pickBestEligible(eligible);
+        var best = pick.best;
         best.found = true;
+        best.debugSource = 'eligible';
+        best.debugCardCount = cards.length;
+        best.debugStrictCount = strictCards.length;
+        best.debugEligibleCount = eligible.length;
+        best.debugEligibleAmounts = pick.debug.debugEligibleAmounts;
+        best.debugLowestBeforePick = pick.debug.debugLowestBeforePick;
+        best.debugMedianCutoff = pick.debug.debugMedianCutoff;
+        best.debugPickAdjusted = pick.debug.debugPickAdjusted;
         delete best.cardIndex;
         return JSON.stringify(best);
+      }
+
+      var fallbackAmounts = [];
+      for (var fb = 0; fb < cards.length; fb++) {
+        var fa = cardPrimaryPrice(cards[fb]);
+        if (fa !== null) fallbackAmounts.push(fa);
+      }
+      if (fallbackAmounts.length) {
+        var fbBest = primaryPriceFromPrices(fallbackAmounts);
+        if (fbBest !== null) {
+          return JSON.stringify({
+            found: true,
+            amount: fbBest,
+            currency: currency,
+            debugSource: 'fallback_cards',
+            debugCardCount: cards.length,
+            debugStrictCount: strictCards.length,
+            debugEligibleCount: 0,
+            debugFallbackAmounts: fallbackAmounts
+          });
+        }
+      }
+
+      var root = resultsRoot();
+      var scopedPrimary = primaryPriceFromText(root ? (root.innerText || '') : body);
+      var scopedFrom = 'scoped_primary';
+      if (scopedPrimary === null) {
+        scopedPrimary = primaryPriceFromText(body);
+        scopedFrom = 'body_primary';
+      }
+      if (scopedPrimary !== null) {
+        return JSON.stringify({
+          found: true,
+          amount: scopedPrimary,
+          currency: currency,
+          debugSource: scopedFrom,
+          debugCardCount: cards.length,
+          debugStrictCount: strictCards.length,
+          debugEligibleCount: 0
+        });
       }
 
       // Check if Skyscanner explicitly says no flights found
@@ -450,15 +697,7 @@ public final class SkyscannerWebScraper: NSObject {
         return JSON.stringify({ found: false, explicitNoFlights: true });
       }
 
-      var bodyPrices = pricesIn(body);
-      if (!bodyPrices.length) {
-        return JSON.stringify({ found: false });
-      }
-      return JSON.stringify({
-        found: true,
-        amount: Math.min.apply(null, bodyPrices),
-        currency: currency
-      });
+      return JSON.stringify({ found: false });
     })();
     """
     }
