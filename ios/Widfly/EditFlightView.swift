@@ -29,88 +29,83 @@ struct EditFlightView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Route") {
-                    AirportField(
-                        title: "Departure Airport",
-                        placeholder: "City, Country, or IATA",
-                        text: $origin
-                    )
-                    AirportField(
-                        title: "Destination Airport",
-                        placeholder: "City, Country, or IATA",
-                        text: $destination
-                    )
-                    DatePicker("Date", selection: $departureDate, displayedComponents: .date)
-                }
+            ZStack {
+                Theme.background.ignoresSafeArea()
 
-                Section {
-                    airlineReadOnlyRow
-                    readOnlyRow("Departure Time", value: flight.departureTime)
-                    readOnlyRow("Arrival Time", value: flight.arrivalTime)
-                } header: {
-                    Text("Flight Details")
-                } footer: {
-                    Text("These fields are filled automatically when Widfly fetches the selected Skyscanner result.")
-                }
+                ScrollView {
+                    VStack(spacing: 20) {
+                        WidflyFormSection("Route & Date") {
+                            AirportField(
+                                title: "Departure Airport",
+                                placeholder: "City, Country, or IATA",
+                                text: $origin
+                            )
+                            WidflyFormDivider()
+                            AirportField(
+                                title: "Destination Airport",
+                                placeholder: "City, Country, or IATA",
+                                text: $destination
+                            )
+                            WidflyFormDivider()
+                            DatePicker("Date", selection: $departureDate, in: Date()..., displayedComponents: .date)
+                                .tint(Theme.amber)
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 10)
+                        }
 
-                Section {
-                    Toggle("Limit Flight Duration", isOn: $limitDuration)
-                    if limitDuration {
-                        Stepper(value: $maxHours, in: 2...30, step: 0.5) {
-                            HStack {
-                                Text("Max Duration")
-                                Spacer()
-                                Text(maxDurationLabel)
-                                    .foregroundStyle(.secondary)
-                            }
+                        WidflyFormSection(
+                            "Search Filters",
+                            footer: "Widfly picks the cheapest Skyscanner result that matches these filters."
+                        ) {
+                            WidflyDurationFilter(isEnabled: $limitDuration, maxHours: $maxHours)
+                        }
+
+                        WidflyFormSection("Time Filters") {
+                            WidflyTimeFilters(
+                                departure: $departureTimeFilter,
+                                arrival: $arrivalTimeFilter
+                            )
+                        }
+
+                        WidflyFormSection(
+                            "Latest Flight Details",
+                            footer: "These fields are filled automatically when Widfly fetches the selected Skyscanner result."
+                        ) {
+                            airlineReadOnlyRow
+                            WidflyFormDivider()
+                            readOnlyRow("Departure Time", value: flight.departureTime)
+                            WidflyFormDivider()
+                            readOnlyRow("Arrival Time", value: flight.arrivalTime)
                         }
                     }
-                } header: {
-                    Text("Search Filters")
-                } footer: {
-                    Text("Widfly picks the cheapest Skyscanner result that matches these filters.")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
-
-                Section("Time Filters") {
-                    Picker("Departure Time", selection: $departureTimeFilter) {
-                        Text("Any Time").tag(TimeFilter?.none)
-                        ForEach(TimeFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(TimeFilter?.some(filter))
-                        }
-                    }
-                    Picker("Arrival Time", selection: $arrivalTimeFilter) {
-                        Text("Any Time").tag(TimeFilter?.none)
-                        ForEach(TimeFilter.allCases) { filter in
-                            Text(filter.rawValue).tag(TimeFilter?.some(filter))
-                        }
-                    }
-                }
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle("Edit Flight")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(Theme.amber)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         save()
                     }
+                    .foregroundStyle(Theme.amber)
+                    .fontWeight(.bold)
                     .disabled(!canSave)
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     private var canSave: Bool {
         AirportLookup.resolve(origin) != nil && AirportLookup.resolve(destination) != nil
-    }
-
-    private var maxDurationLabel: String {
-        let total = Int(maxHours * 60)
-        let h = total / 60
-        let m = total % 60
-        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 
     private func save() {
@@ -133,29 +128,33 @@ struct EditFlightView: View {
         let name = flight.airlineName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         HStack {
             Text("Airline Name")
+                .foregroundStyle(.white)
             Spacer()
             if name.isEmpty {
                 Text("Fetched After Refresh")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.mutedText)
             } else {
                 HStack(spacing: 8) {
                     AirlineLogo(airlineName: name, size: 22)
                     Text(name)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.mutedText)
                         .multilineTextAlignment(.trailing)
                 }
             }
         }
+        .padding(.vertical, 13)
     }
 
     private func readOnlyRow(_ title: String, value: String?) -> some View {
         let displayValue = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return HStack {
             Text(title)
+                .foregroundStyle(.white)
             Spacer()
             Text(displayValue?.isEmpty == false ? displayValue! : "Fetched After Refresh")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.mutedText)
                 .multilineTextAlignment(.trailing)
         }
+        .padding(.vertical, 13)
     }
 }

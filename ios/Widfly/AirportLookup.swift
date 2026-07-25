@@ -5,17 +5,45 @@ struct Airport: Identifiable, Hashable {
     let name: String
     let city: String
     let country: String
+    let aliases: [String]
+
+    init(
+        code: String,
+        name: String,
+        city: String,
+        country: String,
+        aliases: [String] = []
+    ) {
+        self.code = code
+        self.name = name
+        self.city = city
+        self.country = country
+        self.aliases = aliases
+    }
 
     var id: String { code }
     var displayTitle: String { "\(city) (\(code))" }
     var displaySubtitle: String { "\(name), \(country)" }
 
     func matches(_ query: String) -> Bool {
-        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).folding(options: .diacriticInsensitive, locale: .current).lowercased()
+        let normalized = Self.normalize(query)
         guard !normalized.isEmpty else { return false }
-        return [code, name, city, country]
-            .map { $0.folding(options: .diacriticInsensitive, locale: .current).lowercased() }
+
+        var searchTerms = [code, name, city, country] + aliases
+        if country == "Turkey" {
+            searchTerms += ["Türkiye", "Turkiye"]
+        }
+
+        return searchTerms
+            .map(Self.normalize)
             .contains { $0.contains(normalized) }
+    }
+
+    private static func normalize(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "tr_TR"))
+            .lowercased()
     }
 }
 
@@ -28,6 +56,13 @@ enum AirportLookup {
         Airport(code: "ADB", name: "Izmir Adnan Menderes Airport", city: "Izmir", country: "Turkey"),
         Airport(code: "AYT", name: "Antalya Airport", city: "Antalya", country: "Turkey"),
         Airport(code: "ESB", name: "Ankara Esenboga Airport", city: "Ankara", country: "Turkey"),
+        Airport(
+            code: "ASR",
+            name: "Kayseri Erkilet Airport",
+            city: "Kayseri",
+            country: "Turkey",
+            aliases: ["Erkilet", "Kayseri Havalimanı", "Kayseri Havaalanı", "Erkilet Havalimanı"]
+        ),
         Airport(code: "ECN", name: "Ercan International Airport", city: "Lefkosa", country: "Cyprus"),
         Airport(code: "RTM", name: "Rotterdam The Hague Airport", city: "Rotterdam", country: "Netherlands"),
         Airport(code: "AMS", name: "Amsterdam Schiphol Airport", city: "Amsterdam", country: "Netherlands"),

@@ -5,6 +5,7 @@ import WidflyKit
 @main
 struct WidflyApp: App {
     @State private var model = AppModel()
+    @State private var isShowingIntro = true
 
     init() {
         UIWindow.appearance().backgroundColor = Theme.backgroundUIColor
@@ -12,8 +13,19 @@ struct WidflyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(model)
+            ZStack {
+                ContentView()
+                    .environment(model)
+
+                if isShowingIntro {
+                    LaunchIntroView {
+                        isShowingIntro = false
+                    }
+                    .zIndex(1)
+                    .transition(.opacity)
+                }
+            }
+            .background(Theme.background)
         }
     }
 }

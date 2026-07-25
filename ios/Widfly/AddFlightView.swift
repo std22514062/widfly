@@ -12,96 +12,109 @@ struct AddFlightView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                ForEach($segments) { $segment in
-                    Section {
-                        AirportField(
-                            title: "Departure Airport",
-                            placeholder: "City, Country, or IATA",
-                            text: $segment.origin
-                        )
-                        AirportField(
-                            title: "Destination Airport",
-                            placeholder: "City, Country, or IATA",
-                            text: $segment.destination
-                        )
-                        dateSelector(for: $segment)
-                        
-                        Picker("Departure Time", selection: $segment.departureTimeFilter) {
-                            Text("Any Time").tag(TimeFilter?.none)
-                            ForEach(TimeFilter.allCases) { filter in
-                                Text(filter.rawValue).tag(TimeFilter?.some(filter))
-                            }
-                        }
-                        Picker("Arrival Time", selection: $segment.arrivalTimeFilter) {
-                            Text("Any Time").tag(TimeFilter?.none)
-                            ForEach(TimeFilter.allCases) { filter in
-                                Text(filter.rawValue).tag(TimeFilter?.some(filter))
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            Text(segmentTitle(segment))
-                            Spacer()
-                            if segments.count > 1 {
-                                Button {
-                                    remove(segment)
-                                } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundStyle(.red)
-                                        .font(.system(size: 18, weight: .bold))
+            ZStack {
+                Theme.background.ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 20) {
+                        ForEach($segments) { $segment in
+                            WidflyFormSection(
+                                segmentTitle(segment),
+                                trailing: {
+                                    if segments.count > 1 {
+                                        Button {
+                                            remove(segment)
+                                        } label: {
+                                            Image(systemName: "minus.circle.fill")
+                                                .foregroundStyle(Color(red: 1, green: 0.38, blue: 0.35))
+                                                .font(.system(size: 18, weight: .bold))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("Remove \(segmentTitle(segment))")
+                                    }
+                                },
+                                content: {
+                                    AirportField(
+                                        title: "Departure Airport",
+                                        placeholder: "City, Country, or IATA",
+                                        text: $segment.origin
+                                    )
+                                    WidflyFormDivider()
+                                    AirportField(
+                                        title: "Destination Airport",
+                                        placeholder: "City, Country, or IATA",
+                                        text: $segment.destination
+                                    )
+                                    WidflyFormDivider()
+                                    dateSelector(for: $segment)
+                                    WidflyFormDivider()
+                                    WidflyTimeFilters(
+                                        departure: $segment.departureTimeFilter,
+                                        arrival: $segment.arrivalTimeFilter
+                                    )
                                 }
-                                .buttonStyle(.plain)
-                            }
+                            )
+                        }
+
+                        Button {
+                            segments.append(FlightSegmentInput())
+                        } label: {
+                            Label("Add Another Flight", systemImage: "plus.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Theme.amber)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 13)
+                                .background(
+                                    RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
+                                        .fill(Theme.cardFill)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: Theme.cardCornerRadius, style: .continuous)
+                                                .strokeBorder(Theme.cardStroke, lineWidth: 0.7)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+
+                        WidflyFormSection(
+                            "Search Filters",
+                            footer: "Total time including layovers. Flights exceeding this limit are excluded from the price."
+                        ) {
+                            WidflyDurationFilter(isEnabled: $limitDuration, maxHours: $maxHours)
+                        }
+
+                        WidflyFormSection(
+                            "After Saving",
+                            footer: "Prices are read by opening the Skyscanner page in WebKit. If a captcha appears, try again in a few minutes."
+                        ) {
+                            Toggle("Fetch Price After Saving", isOn: $refreshAfterSave)
+                                .tint(Theme.amber)
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 13)
                         }
                     }
-                }
-
-                Section {
-                    Button {
-                        segments.append(FlightSegmentInput())
-                    } label: {
-                        Label("Add Another Flight", systemImage: "plus.circle")
-                    }
-                } footer: {
-                    Text("Use this for multi-city trips. Each segment is tracked as its own route.")
-                }
-
-                Section {
-                    Toggle("Limit Flight Duration", isOn: $limitDuration)
-                    if limitDuration {
-                        Stepper(value: $maxHours, in: 2...30, step: 0.5) {
-                            HStack {
-                                Text("Max Duration")
-                                Spacer()
-                                Text(durationLabel)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                } footer: {
-                    Text("Total time including layovers. Flights exceeding this limit are excluded from the price.")
-                }
-
-                Section {
-                    Toggle("Fetch Price After Saving", isOn: $refreshAfterSave)
-                } footer: {
-                    Text("Prices are read by opening the Skyscanner page in WebKit. If a captcha appears, try again in a few minutes.")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
             }
             .navigationTitle(segments.count > 1 ? "New Itinerary" : "New Route")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(Theme.amber)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         save()
                     }
+                    .foregroundStyle(Theme.amber)
+                    .fontWeight(.bold)
                     .disabled(!canSave)
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     private var canSave: Bool {
@@ -112,13 +125,6 @@ struct AddFlightView: View {
         }
     }
 
-    private var durationLabel: String {
-        let total = Int(maxHours * 60)
-        let h = total / 60
-        let m = total % 60
-        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
-    }
-
     @ViewBuilder
     private func dateSelector(for segment: Binding<FlightSegmentInput>) -> some View {
         Button {
@@ -126,13 +132,21 @@ struct AddFlightView: View {
         } label: {
             HStack {
                 Text("Date")
+                    .foregroundStyle(.white)
                 Spacer()
                 Text(segment.wrappedValue.departureDate?.formatted(date: .abbreviated, time: .omitted) ?? "Select Date")
-                    .foregroundStyle(segment.wrappedValue.departureDate == nil ? .secondary : .primary)
+                    .foregroundStyle(segment.wrappedValue.departureDate == nil ? Theme.mutedText : Theme.amber)
+                    .fontWeight(.semibold)
+                Image(systemName: segment.wrappedValue.isShowingDatePicker ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Theme.mutedText)
             }
+            .padding(.vertical, 13)
         }
+        .buttonStyle(.plain)
 
         if segment.wrappedValue.isShowingDatePicker {
+            WidflyFormDivider()
             DatePicker(
                 "",
                 selection: Binding(
@@ -148,6 +162,9 @@ struct AddFlightView: View {
             )
             .datePickerStyle(.graphical)
             .labelsHidden()
+            .tint(Theme.amber)
+            .foregroundStyle(.white)
+            .padding(.bottom, 8)
         }
     }
 
@@ -197,45 +214,4 @@ private struct FlightSegmentInput: Identifiable, Equatable {
     var isShowingDatePicker = false
     var departureTimeFilter: TimeFilter? = nil
     var arrivalTimeFilter: TimeFilter? = nil
-}
-
-struct AirportField: View {
-    let title: String
-    let placeholder: String
-    @Binding var text: String
-    @FocusState private var isFocused: Bool
-
-    private var suggestions: [Airport] {
-        AirportLookup.suggestions(for: text)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField(placeholder, text: $text)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .focused($isFocused)
-
-            if isFocused,
-               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               !suggestions.isEmpty {
-                ForEach(suggestions) { airport in
-                    Button {
-                        text = airport.code
-                        isFocused = false
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(airport.displayTitle)
-                                .font(.subheadline.weight(.semibold))
-                            Text(airport.displaySubtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .accessibilityLabel(title)
-    }
 }
